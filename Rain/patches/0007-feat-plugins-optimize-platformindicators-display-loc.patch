@@ -1,0 +1,157 @@
+From f7face4f58ece4ac9090c832dc6f9eea72a4ce26 Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 18:53:33 +0800
+Subject: [PATCH] feat(plugins): optimize platformindicators display locations
+ and flex rules
+
+---
+ src/plugins/platformindicators/index.tsx | 110 +++++------------------
+ 1 file changed, 21 insertions(+), 89 deletions(-)
+
+diff --git a/src/plugins/platformindicators/index.tsx b/src/plugins/platformindicators/index.tsx
+index 073f27f..79fdd84 100644
+--- a/src/plugins/platformindicators/index.tsx
++++ b/src/plugins/platformindicators/index.tsx
+@@ -29,94 +29,26 @@ export default definePlugin({
+ 
+         const debugLabels = false;
+ 
+-        // tabs v2 dm header
+-        unpatches.push(after("default", findByName("ChannelHeader", false), (args, res) => {
+-            if (!platformIndicatorSettings.dmTopBar) return;
+-            if (!(res.type?.type?.name === "PrivateChannelHeader")) return;
+-
+-            after("type", res.type, (args, res) => {
+-                if (!res.props?.children?.props?.children) return;
+-                const userId = findInReactTree(res, m => m.props?.user?.id)?.props?.user?.id;
+-                if (!userId) return;
+-
+-                const dmTopBar = res.props?.children;
+-                if (!findInReactTree(res, m => m.key === "DMTabsV2Header")) {
+-                    if (dmTopBar.props?.children?.props?.children[1]) {
+-                        if (typeof dmTopBar.props?.children?.props?.children[1]?.type === "function") {
+-                            const titleThing = dmTopBar.props?.children?.props?.children[1];
+-
+-                            const unpatchTV2HdrV2 = after("type", titleThing, (args, res) => {
+-                                unpatchTV2HdrV2();
+-                                if (!findInReactTree(res, c => c.key === "DMTabsV2Header-v2")) {
+-                                    res.props.children[0].props.children.push(
+-                                        <PresenceUpdatedContainer key="DMTabsV2Header-v2">
+-                                            {debugLabels ? <Text>DTV2H-v2</Text> : <StatusIcons userId={userId} />}
+-                                        </PresenceUpdatedContainer>
+-                                    );
+-                                }
+-                            });
+-                        } else {
+-                            const arrowId = findAssetId("arrow-right");
+-                            const container1 = findInReactTree(dmTopBar, m => m.props?.children[1]?.props?.source === arrowId);
+-
+-                            container1?.props?.children?.push(<View
+-                                key="DMTabsV2Header"
+-                                style={{
+-                                    flexDirection: "row",
+-                                    justifyContent: "center",
+-                                    alignContent: "flex-start"
+-                                }}>
+-                                <View
+-                                    key="DMTabsV2HeaderIcons"
+-                                    style={{
+-                                        flexDirection: "row"
+-                                    }}></View>
+-                            </View>);
+-                        }
+-                    }
+-                }
+-                const topIcons = findInReactTree(res, m => m.key === "DMTabsV2HeaderIcons");
+-                if (topIcons) {
+-                    topIcons.props.children = <StatusIcons userId={userId} />;
+-                }
+-            });
+-        }));
++        // tabs v2 dm header removed per user request
+ 
+-        // User profile content
+-        const UserProfileContent = findByTypeName("UserProfileContent");
+-
+-        unpatches.push(after("type", UserProfileContent, (args, res) => {
+-            const primaryInfo = findInReactTree(res, c => c?.type?.name === "PrimaryInfo");
+-            after("type", primaryInfo, (args, res) => {
+-                if (res?.type?.name === "UserProfilePrimaryInfo") {
+-                    after("type", res, (args, res) => {
+-                        const displayName = findInReactTree(res, c => c?.type?.name === "DisplayName");
+-
+-                        after("type", displayName, (args, res) => {
+-                            const userId = args[0]?.user?.id;
+-                            if (userId) {
+-                                res.props.children.push(
+-                                    <PresenceUpdatedContainer key="UserProfileIcons">
+-                                        <StatusIcons userId={userId} />
+-                                    </PresenceUpdatedContainer>
+-                                );
+-                            }
+-                        });
+-                    });
+-                }
+-            });
+-        }));
+ 
+-        // DisplayName patch
+-        const DisplayName = findByProps("DisplayName");
+-        unpatches.push(after("DisplayName", DisplayName, (args, res) => {
+-            const user = args[0]?.user;
+-            if (user === undefined) return;
+-            if (!res) return;
+-            if (!user.id) return;
+-            if (!platformIndicatorSettings.profileUsername) return;
+-            res.props?.children?.props?.children[0]?.props?.children?.push(<StatusIcons userId={user.id} />);
+-        }));
++        // DisplayName patch (Chat messages and elsewhere)
++        const DisplayName = findByName("DisplayName", false);
++        if (DisplayName) {
++            unpatches.push(after("default", DisplayName, (args, res) => {
++                const user = args[0]?.user;
++                if (!user || !user.id || !res) return;
++
++                const row = findInReactTree(res, c => c?.props?.style?.flexDirection === "row");
++                if (row?.props?.children && Array.isArray(row.props.children)) {
++                    row.props.children.push(
++                        <View key="DisplayNamePlatformIndicators" style={{ marginLeft: 4, flexDirection: "row", alignItems: "center", flexShrink: 0 }}>
++                            <StatusIcons userId={user.id} />
++                        </View>
++                    );
++                }
++            }));
++        }
+ 
+         // Status patch
+         const Status = findByName("Status", false);
+@@ -141,7 +73,7 @@ export default definePlugin({
+                             <View
+                                 key="GuildMemberRowStatusIconsView"
+                                 style={{
+-                                    flexDirection: "row"
++                                    flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4
+                                 }}>
+                                 {debugLabels ? <Text>GMRSIV</Text> : <StatusIcons userId={user.id} />}
+                             </View>
+@@ -167,7 +99,7 @@ export default definePlugin({
+                     key="TabsV2MemberListStatusIconsView">
+                         {res.props.label}
+                         <View key="TabsV2MemberListStatusIconsView" style={{
+-                            flexDirection: "row"
++                            flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4
+                         }}>
+                             {debugLabels ? <Text>TV2MLSIV</Text> : <StatusIcons userId={user.id} />}
+                         </View>
+@@ -195,7 +127,7 @@ export default definePlugin({
+                 const textContainer = findInReactTree(res, m => m.props?.children?.[0]?.props?.variant === "redesign/channel-title/semibold");
+                 if (textContainer) {
+                     textContainer.props.children.push(<View key="TabsV2RedesignDMListIcons" style={{
+-                        flexDirection: "row"
++                        flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4
+                     }}>
+                         {debugLabels ? <Text>TV2RDMLI</Text> : <StatusIcons userId={userId} />}
+                     </View>);
+-- 
+2.55.0.windows.5
+

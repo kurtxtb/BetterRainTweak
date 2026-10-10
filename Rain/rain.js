@@ -16246,14 +16246,14 @@ ${pendingInsertLink}` : pendingInsertLink;
           if (storage.edited?.enabled && typeof msg.content === "string" && msg.content.includes(EDIT_HISTORY_SEPARATOR)) {
             var separator2 = new RegExp(EDIT_HISTORY_SEPARATOR, "gmi");
             if (separator2.test(msg.content) && data2.buttons) {
-              var React32 = require_react();
+              var React31 = require_react();
               var ActionSheet3 = findByName("ActionSheet");
               var FormRow3 = findByName("FormRow");
               var getAssetIDByName = findByProps("getAssetIDByName")?.getAssetIDByName;
               var FluxDispatcher2 = findByProps("dispatch", "_subscriptions");
-              data2.buttons.push(React32.createElement(FormRow3, {
+              data2.buttons.push(React31.createElement(FormRow3, {
                 label: "Remove Edit History",
-                leading: React32.createElement("img", {
+                leading: React31.createElement("img", {
                   style: {
                     opacity: 1
                   },
@@ -20861,36 +20861,6 @@ ${pendingInsertLink}` : pendingInsertLink;
     }
   });
 
-  // src/plugins/platformindicators/PresenceUpdatedContainer.tsx
-  var import_react24, PresenceUpdatedContainer, PresenceUpdatedContainer_default;
-  var init_PresenceUpdatedContainer = __esm({
-    "src/plugins/platformindicators/PresenceUpdatedContainer.tsx"() {
-      "use strict";
-      init_asyncIteratorSymbol();
-      init_promiseAllSettled();
-      init_common();
-      import_react24 = __toESM(require_react());
-      PresenceUpdatedContainer = ({ children }) => {
-        var [counter, setCounter] = (0, import_react24.useState)(0);
-        (0, import_react24.useEffect)(() => {
-          var presenceUpdate = () => {
-            setCounter((prevCounter) => prevCounter + 1);
-          };
-          FluxDispatcher.subscribe("PRESENCE_UPDATES", presenceUpdate);
-          return () => {
-            FluxDispatcher.unsubscribe("PRESENCE_UPDATES", presenceUpdate);
-          };
-        }, []);
-        return import_react24.default.Children.map(children, (child, index) => {
-          return /* @__PURE__ */ import_react24.default.cloneElement(child, {
-            key: `${index}-${counter}`
-          });
-        });
-      };
-      PresenceUpdatedContainer_default = PresenceUpdatedContainer;
-    }
-  });
-
   // src/plugins/platformindicators/storage.ts
   var usePlatformIndicatorSettings, platformIndicatorSettings;
   var init_storage25 = __esm({
@@ -21118,7 +21088,6 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_promiseAllSettled();
       init_async_to_generator();
       init_jsxRuntime();
-      init_assets();
       init_patcher();
       init_storage();
       init_utils();
@@ -21126,7 +21095,6 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_common();
       init_plugins3();
       init_Developers();
-      init_PresenceUpdatedContainer();
       init_settings22();
       init_StatusIcons();
       init_storage25();
@@ -21145,88 +21113,27 @@ ${pendingInsertLink}` : pendingInsertLink;
           return _async_to_generator(function* () {
             waitForHydration(usePlatformIndicatorSettings);
             var debugLabels = false;
-            unpatches6.push(after("default", findByName("ChannelHeader", false), (args, res) => {
-              if (!platformIndicatorSettings.dmTopBar) return;
-              if (!(res.type?.type?.name === "PrivateChannelHeader")) return;
-              after("type", res.type, (args2, res2) => {
-                if (!res2.props?.children?.props?.children) return;
-                var userId = findInReactTree(res2, (m2) => m2.props?.user?.id)?.props?.user?.id;
-                if (!userId) return;
-                var dmTopBar = res2.props?.children;
-                if (!findInReactTree(res2, (m2) => m2.key === "DMTabsV2Header")) {
-                  if (dmTopBar.props?.children?.props?.children[1]) {
-                    if (typeof dmTopBar.props?.children?.props?.children[1]?.type === "function") {
-                      var titleThing = dmTopBar.props?.children?.props?.children[1];
-                      var unpatchTV2HdrV2 = after("type", titleThing, (args3, res3) => {
-                        unpatchTV2HdrV2();
-                        if (!findInReactTree(res3, (c2) => c2.key === "DMTabsV2Header-v2")) {
-                          res3.props.children[0].props.children.push(/* @__PURE__ */ jsx(PresenceUpdatedContainer_default, {
-                            children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
-                              children: "DTV2H-v2"
-                            }) : /* @__PURE__ */ jsx(StatusIcons, {
-                              userId
-                            })
-                          }, "DMTabsV2Header-v2"));
-                        }
-                      });
-                    } else {
-                      var arrowId = findAssetId2("arrow-right");
-                      var container1 = findInReactTree(dmTopBar, (m2) => m2.props?.children[1]?.props?.source === arrowId);
-                      container1?.props?.children?.push(/* @__PURE__ */ jsx(View28, {
-                        style: {
-                          flexDirection: "row",
-                          justifyContent: "center",
-                          alignContent: "flex-start"
-                        },
-                        children: /* @__PURE__ */ jsx(View28, {
-                          style: {
-                            flexDirection: "row"
-                          }
-                        }, "DMTabsV2HeaderIcons")
-                      }, "DMTabsV2Header"));
-                    }
-                  }
+            var DisplayName2 = findByName("DisplayName", false);
+            if (DisplayName2) {
+              unpatches6.push(after("default", DisplayName2, (args, res) => {
+                var user = args[0]?.user;
+                if (!user || !user.id || !res) return;
+                var row = findInReactTree(res, (c2) => c2?.props?.style?.flexDirection === "row");
+                if (row?.props?.children && Array.isArray(row.props.children)) {
+                  row.props.children.push(/* @__PURE__ */ jsx(View28, {
+                    style: {
+                      marginLeft: 4,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexShrink: 0
+                    },
+                    children: /* @__PURE__ */ jsx(StatusIcons, {
+                      userId: user.id
+                    })
+                  }, "DisplayNamePlatformIndicators"));
                 }
-                var topIcons = findInReactTree(res2, (m2) => m2.key === "DMTabsV2HeaderIcons");
-                if (topIcons) {
-                  topIcons.props.children = /* @__PURE__ */ jsx(StatusIcons, {
-                    userId
-                  });
-                }
-              });
-            }));
-            var UserProfileContent = findByTypeName("UserProfileContent");
-            unpatches6.push(after("type", UserProfileContent, (args, res) => {
-              var primaryInfo = findInReactTree(res, (c2) => c2?.type?.name === "PrimaryInfo");
-              after("type", primaryInfo, (args2, res2) => {
-                if (res2?.type?.name === "UserProfilePrimaryInfo") {
-                  after("type", res2, (args3, res3) => {
-                    var displayName = findInReactTree(res3, (c2) => c2?.type?.name === "DisplayName");
-                    after("type", displayName, (args4, res4) => {
-                      var userId = args4[0]?.user?.id;
-                      if (userId) {
-                        res4.props.children.push(/* @__PURE__ */ jsx(PresenceUpdatedContainer_default, {
-                          children: /* @__PURE__ */ jsx(StatusIcons, {
-                            userId
-                          })
-                        }, "UserProfileIcons"));
-                      }
-                    });
-                  });
-                }
-              });
-            }));
-            var DisplayName2 = findByProps("DisplayName");
-            unpatches6.push(after("DisplayName", DisplayName2, (args, res) => {
-              var user = args[0]?.user;
-              if (user === void 0) return;
-              if (!res) return;
-              if (!user.id) return;
-              if (!platformIndicatorSettings.profileUsername) return;
-              res.props?.children?.props?.children[0]?.props?.children?.push(/* @__PURE__ */ jsx(StatusIcons, {
-                userId: user.id
               }));
-            }));
+            }
             var Status2 = findByName("Status", false);
             unpatches6.push(before("default", Status2, (args) => {
               if (!args) return;
@@ -21245,7 +21152,10 @@ ${pendingInsertLink}` : pendingInsertLink;
                   if (row) {
                     row.props.children.splice(2, 0, /* @__PURE__ */ jsx(View28, {
                       style: {
-                        flexDirection: "row"
+                        flexDirection: "row",
+                        alignItems: "center",
+                        flexShrink: 0,
+                        marginLeft: 4
                       },
                       children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
                         children: "GMRSIV"
@@ -21272,7 +21182,10 @@ ${pendingInsertLink}` : pendingInsertLink;
                     res.props.label,
                     /* @__PURE__ */ jsx(View28, {
                       style: {
-                        flexDirection: "row"
+                        flexDirection: "row",
+                        alignItems: "center",
+                        flexShrink: 0,
+                        marginLeft: 4
                       },
                       children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
                         children: "TV2MLSIV"
@@ -21302,7 +21215,10 @@ ${pendingInsertLink}` : pendingInsertLink;
                 if (textContainer) {
                   textContainer.props.children.push(/* @__PURE__ */ jsx(View28, {
                     style: {
-                      flexDirection: "row"
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flexShrink: 0,
+                      marginLeft: 4
                     },
                     children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
                       children: "TV2RDMLI"
@@ -22016,14 +21932,14 @@ render().catch(error => {
   }
   function QuotePreview({ message, dataUrl, onDataUrl }) {
     var settings3 = useQuoterSettings();
-    var [WebView] = (0, import_react25.useState)(() => resolveWebView());
-    var [error, setError] = (0, import_react25.useState)("");
+    var [WebView] = (0, import_react24.useState)(() => resolveWebView());
+    var [error, setError] = (0, import_react24.useState)("");
     var grayscale = Boolean(settings3.grayscale);
     var showWatermark = Boolean(settings3.showWatermark);
     var watermark = String(settings3.watermark ?? "");
     var hydrated = Boolean(settings3._hasHydrated);
-    var [watermarkDraft, setWatermarkDraft] = (0, import_react25.useState)(watermark);
-    (0, import_react25.useEffect)(() => {
+    var [watermarkDraft, setWatermarkDraft] = (0, import_react24.useState)(watermark);
+    (0, import_react24.useEffect)(() => {
       if (watermarkDraft === watermark) return;
       var timer = setTimeout(() => settings3.updateSettings({
         watermark: watermarkDraft
@@ -22032,7 +21948,7 @@ render().catch(error => {
     }, [
       watermarkDraft
     ]);
-    var { renderId, html } = (0, import_react25.useMemo)(() => {
+    var { renderId, html } = (0, import_react24.useMemo)(() => {
       var renderId2 = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       return {
         renderId: renderId2,
@@ -22051,7 +21967,7 @@ render().catch(error => {
       showWatermark,
       watermark
     ]);
-    (0, import_react25.useEffect)(() => {
+    (0, import_react24.useEffect)(() => {
       setError("");
       onDataUrl("");
     }, [
@@ -22205,7 +22121,7 @@ render().catch(error => {
     });
   }
   function QuoteAlert({ message }) {
-    var [dataUrl, setDataUrl] = (0, import_react25.useState)("");
+    var [dataUrl, setDataUrl] = (0, import_react24.useState)("");
     var onConfirm = () => {
       var channelId = getMessageChannelId(message);
       if (!channelId) {
@@ -22247,7 +22163,7 @@ render().catch(error => {
       message
     }));
   }
-  var import_react25, import_react_native46, ALERT_KEY, WATERMARK_DEBOUNCE_MS, toggleRowStyle, cachedWebView;
+  var import_react24, import_react_native46, ALERT_KEY, WATERMARK_DEBOUNCE_MS, toggleRowStyle, cachedWebView;
   var init_QuotePreview = __esm({
     "src/plugins/quoter/components/QuotePreview.tsx"() {
       "use strict";
@@ -22260,7 +22176,7 @@ render().catch(error => {
       init_toasts();
       init_metro();
       init_components();
-      import_react25 = __toESM(require_react());
+      import_react24 = __toESM(require_react());
       import_react_native46 = __toESM(require_react_native());
       init_quote();
       init_renderer();
@@ -24634,7 +24550,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       })), [
         guild.id
       ]);
-      (0, import_react26.useEffect)(() => {
+      (0, import_react25.useEffect)(() => {
         var close = () => {
           if (contextMenu.ContextMenuStore.getState().menu?.items === items) contextMenu.hideContextMenu();
         };
@@ -24662,9 +24578,9 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
     var { Gesture, GestureDetector } = findByProps("Gesture", "GestureDetector");
     var { Image: Image19, Pressable: Pressable9, ScrollView: ScrollView48, Text: Text9, View: View55, TextInput: TextInput6 } = Native;
     function DragTarget(properties) {
-      var callbacks2 = (0, import_react26.useRef)(properties);
+      var callbacks2 = (0, import_react25.useRef)(properties);
       callbacks2.current = properties;
-      var gesture = (0, import_react26.useMemo)(() => Gesture.Pan().activateAfterLongPress(LONG_PRESS_MS).shouldCancelWhenOutside(false).runOnJS(true).onStart(({ absoluteX: x2, absoluteY: y2 }) => callbacks2.current.onStart({
+      var gesture = (0, import_react25.useMemo)(() => Gesture.Pan().activateAfterLongPress(LONG_PRESS_MS).shouldCancelWhenOutside(false).runOnJS(true).onStart(({ absoluteX: x2, absoluteY: y2 }) => callbacks2.current.onStart({
         x: x2,
         y: y2
       })).onUpdate(({ absoluteX: x2, absoluteY: y2 }) => callbacks2.current.onMove({
@@ -24898,7 +24814,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
     function FolderTitle({ folder, style }) {
       var styles5 = useStyles11();
       var TEXT_DEFAULT = useToken(semanticColors.TEXT_DEFAULT);
-      var [editing, setEditing] = (0, import_react26.useState)("idle");
+      var [editing, setEditing] = (0, import_react25.useState)("idle");
       if (editing !== "idle") return /* @__PURE__ */ jsxs(View55, {
         style,
         children: [
@@ -24987,7 +24903,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         SortedGuildStore,
         UserStore
       ], () => signal.aborted ? EMPTY_SNAPSHOT : controller.snapshot());
-      var directMessages = (0, import_react26.useMemo)(() => orderedDms(snapshot.directMessages, stored.dmOrder), [
+      var directMessages = (0, import_react25.useMemo)(() => orderedDms(snapshot.directMessages, stored.dmOrder), [
         snapshot.directMessages,
         stored.dmOrder
       ]);
@@ -24998,11 +24914,11 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       };
     }
     function useReorder(directMessages, previewTransform) {
-      var [, refresh] = (0, import_react26.useReducer)((value) => value + 1, 0);
-      var reorder = (0, import_react26.useRef)(void 0);
-      var previewRef = (0, import_react26.useRef)(null);
-      var exitTarget = (0, import_react26.useRef)(null);
-      var exitBounds = (0, import_react26.useRef)(void 0);
+      var [, refresh] = (0, import_react25.useReducer)((value) => value + 1, 0);
+      var reorder = (0, import_react25.useRef)(void 0);
+      var previewRef = (0, import_react25.useRef)(null);
+      var exitTarget = (0, import_react25.useRef)(null);
+      var exitBounds = (0, import_react25.useRef)(void 0);
       var measureExit = () => {
         var target = exitTarget.current;
         exitBounds.current = void 0;
@@ -25117,8 +25033,8 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       };
     }
     function useDrawerMotion(expanded, minimum, maximum, scroll, reorder, onOpen) {
-      var [height, setHeight] = (0, import_react26.useState)();
-      var origin = (0, import_react26.useRef)({
+      var [height, setHeight] = (0, import_react25.useState)();
+      var origin = (0, import_react25.useRef)({
         height: 0,
         y: 0,
         lastMove: 0,
@@ -25129,7 +25045,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         origin.current.lastMove = Date.now();
         setHeight(clamp(origin.current.height - event.nativeEvent.pageY + origin.current.y, minimum, maximum));
       };
-      var callbacks2 = (0, import_react26.useRef)({}).current;
+      var callbacks2 = (0, import_react25.useRef)({}).current;
       Object.assign(callbacks2, {
         onStartShouldSetPanResponderCapture: () => {
           origin.current.rejected = false;
@@ -25152,11 +25068,11 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         },
         onPanResponderTerminate: cancel
       });
-      var [pan] = (0, import_react26.useState)(() => Native.PanResponder.create(callbacks2));
+      var [pan] = (0, import_react25.useState)(() => Native.PanResponder.create(callbacks2));
       var currentHeight = height ?? (expanded ? maximum : minimum);
       var reveal = clamp((currentHeight - minimum) / 120, 0, 1);
-      var [rollProgress, setRollProgress] = (0, import_react26.useState)(reveal);
-      (0, import_react26.useEffect)(() => {
+      var [rollProgress, setRollProgress] = (0, import_react25.useState)(reveal);
+      (0, import_react25.useEffect)(() => {
         if (height !== void 0) return setRollProgress(reveal);
         var value = new Native.Animated.Value(rollProgress);
         value.addListener(({ value: value2 }) => setRollProgress(value2));
@@ -25214,8 +25130,8 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var styles5 = useStyles11();
       var TEXT_DEFAULT = useToken(semanticColors.TEXT_DEFAULT);
       var TEXT_MUTED = useToken(semanticColors.TEXT_MUTED);
-      var [folderPage, setFolderPage] = (0, import_react26.useState)(0);
-      var folderPager = (0, import_react26.useRef)(null);
+      var [folderPage, setFolderPage] = (0, import_react25.useState)(0);
+      var folderPager = (0, import_react25.useRef)(null);
       var folderHeight = clamp(height - 64, 240, 360);
       var pages = chunk(folder.children, 3 * Math.max(1, Math.floor((folderHeight - 78) / 90)));
       var folderSize = clamp(width - 32, 240, 320);
@@ -25302,7 +25218,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var TEXT_MUTED = useToken(semanticColors.TEXT_MUTED);
       var TEXT_DEFAULT = useToken(semanticColors.TEXT_DEFAULT);
       var TEXT_BRAND = useToken(semanticColors.TEXT_BRAND);
-      var [ui, setUiState] = (0, import_react26.useState)({
+      var [ui, setUiState] = (0, import_react25.useState)({
         expanded: false,
         view: "servers",
         filter: "all",
@@ -25316,8 +25232,8 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var closeFolder = () => setUi({
         folderOverlayId: void 0
       });
-      var [{ height: viewportHeight, width: viewportWidth }, setViewport] = (0, import_react26.useState)(() => Native.Dimensions.get("window"));
-      var scrollY = (0, import_react26.useRef)(0);
+      var [{ height: viewportHeight, width: viewportWidth }, setViewport] = (0, import_react25.useState)(() => Native.Dimensions.get("window"));
+      var scrollY = (0, import_react25.useRef)(0);
       var data2 = useDrawerData();
       var { dockSpecs, drawerHeight, panelLeft, grid, columns, columnStep, previewWidth, previewTransform, columnOffset } = getDrawerGeometry(viewportWidth, viewportHeight - bottomInset - useSafeAreaInsets3().top, data2.layout);
       var drawerFolder = data2.nodes.find((node) => node.kind === "folder" && node.id === folderId);
@@ -25326,7 +25242,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var drag = useReorder(data2.directMessages, previewTransform);
       var active2 = drag.reorder.current;
       var resize = useDrawerMotion(expanded, dockSpecs.dockHeight - DOCK_REST_OFFSET, drawerHeight, scrollY, drag.reorder, setDrawerOpen);
-      (0, import_react26.useEffect)(() => {
+      (0, import_react25.useEffect)(() => {
         if (folderId && !drawerFolder) setUi({
           folderId: void 0
         });
@@ -25339,7 +25255,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         folderOverlayId,
         overlayFolder
       ]);
-      (0, import_react26.useEffect)(() => {
+      (0, import_react25.useEffect)(() => {
         scrollY.current = 0;
       }, [
         filter,
@@ -25424,7 +25340,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         return item.kind === "guild" ? /* @__PURE__ */ jsx(GuildMenu, {
           guild: item,
           children: render
-        }, item.id) : /* @__PURE__ */ jsx(import_react26.Fragment, {
+        }, item.id) : /* @__PURE__ */ jsx(import_react25.Fragment, {
           children: render()
         }, item.id);
       };
@@ -25572,7 +25488,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                       /* @__PURE__ */ jsxs(View55, {
                         style: styles5.header,
                         children: [
-                          drawerFolder ? /* @__PURE__ */ jsxs(import_react26.Fragment, {
+                          drawerFolder ? /* @__PURE__ */ jsxs(import_react25.Fragment, {
                             children: [
                               /* @__PURE__ */ jsx(Icon, {
                                 label: "Back to all servers",
@@ -25767,7 +25683,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
     ].every(Number.isFinite) || bounds.width <= 0 || bounds.height <= 0) return false;
     return point.x >= bounds.x - 8 && point.x <= bounds.x + bounds.width + 8 && point.y >= bounds.y - 8 && point.y <= bounds.y + bounds.height + 8;
   }
-  var import_chroma_js5, import_react26, Native, useStore2, DOCK_PADDING, DOCK_ITEM_GAP, DOCK_REST_OFFSET, BORDER_WIDTH, ICON_SIZE, ITEM_WIDTH, ITEM_GAP, SIDE_PADDING, YOU_BAR_JOIN_DEPTH, LONG_PRESS_MS, SWIPE_DISTANCE, CENTER, ROW, EMPTY_SNAPSHOT, useStyles11, initials;
+  var import_chroma_js5, import_react25, Native, useStore2, DOCK_PADDING, DOCK_ITEM_GAP, DOCK_REST_OFFSET, BORDER_WIDTH, ICON_SIZE, ITEM_WIDTH, ITEM_GAP, SIDE_PADDING, YOU_BAR_JOIN_DEPTH, LONG_PRESS_MS, SWIPE_DISTANCE, CENTER, ROW, EMPTY_SNAPSHOT, useStyles11, initials;
   var init_surface = __esm({
     "src/plugins/serverdrawer/surface.tsx"() {
       "use strict";
@@ -25785,7 +25701,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       init_stores();
       import_chroma_js5 = __toESM(require_chroma_js());
       init_dist();
-      import_react26 = __toESM(require_react());
+      import_react25 = __toESM(require_react());
       Native = __toESM(require_react_native());
       init_serverdrawer();
       ({ useStore: useStore2 } = createPluginStore("serverdrawer", {
@@ -26107,7 +26023,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
   }
   function transformLeftPanelContent(rendered, dock, dockHeight) {
     var [rail, content] = rendered.props.children;
-    return /* @__PURE__ */ import_react27.default.cloneElement(rendered, {
+    return /* @__PURE__ */ import_react26.default.cloneElement(rendered, {
       children: [
         /* @__PURE__ */ jsx(Native2.View, {
           accessibilityElementsHidden: true,
@@ -26122,7 +26038,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
           },
           children: rail
         }, "rail"),
-        /* @__PURE__ */ import_react27.default.cloneElement(content, {
+        /* @__PURE__ */ import_react26.default.cloneElement(content, {
           style: [
             content.props.style,
             {
@@ -26138,7 +26054,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       ]
     });
   }
-  var import_react27, Native2, dispose, serverdrawer_default;
+  var import_react26, Native2, dispose, serverdrawer_default;
   var init_serverdrawer = __esm({
     "src/plugins/serverdrawer/index.tsx"() {
       "use strict";
@@ -26153,7 +26069,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       init_plugins3();
       init_surface();
       init_Developers();
-      import_react27 = __toESM(require_react());
+      import_react26 = __toESM(require_react());
       Native2 = __toESM(require_react_native());
       serverdrawer_default = definePlugin({
         name: "ServerDrawer",
@@ -26174,7 +26090,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
           var useInset;
           var unpatch6 = [];
           var initializationError;
-          var useActive = () => import_react27.default.useSyncExternalStore((listener) => {
+          var useActive = () => import_react26.default.useSyncExternalStore((listener) => {
             abort.signal.addEventListener("abort", listener);
             return () => abort.signal.removeEventListener("abort", listener);
           }, () => !abort.signal.aborted);
@@ -26198,7 +26114,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
             var rendered = element.type(element.props);
             var active2 = useActive();
             var bottomInset = useInset();
-            var [width, setWidth] = import_react27.default.useState(() => Native2.Dimensions.get("window").width);
+            var [width, setWidth] = import_react26.default.useState(() => Native2.Dimensions.get("window").width);
             return active2 ? transformLeftPanelContent(rendered, /* @__PURE__ */ jsx(DrawerSurface, {
               bottomInset,
               onWidthChange: setWidth
@@ -26955,7 +26871,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var children = element.map(patchMessageView);
       return children.some((child, index) => child !== element[index]) ? children : element;
     }
-    if (!import_react28.default.isValidElement(element)) return element;
+    if (!import_react27.default.isValidElement(element)) return element;
     var { props } = element;
     var callbacks2 = {};
     if (typeof props.onDoubleTapMessage === "function") {
@@ -26965,12 +26881,12 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       callbacks2.onTapUsername = wrapHandler(handleTapUsername, props.onTapUsername);
     }
     if (Object.keys(callbacks2).length > 0) {
-      return import_react28.default.cloneElement(element, callbacks2);
+      return import_react27.default.cloneElement(element, callbacks2);
     }
     var children1 = patchMessageView(props.children);
-    return children1 === props.children ? element : import_react28.default.cloneElement(element, {}, children1);
+    return children1 === props.children ? element : import_react27.default.cloneElement(element, {}, children1);
   }
-  var import_react28, import_react_native51, unpatch4, active, autocompleteUtils, threadHooks, showUserProfileActionSheet3, taptap_default;
+  var import_react27, import_react_native51, unpatch4, active, autocompleteUtils, threadHooks, showUserProfileActionSheet3, taptap_default;
   var init_taptap = __esm({
     "src/plugins/taptap/index.ts"() {
       "use strict";
@@ -26984,7 +26900,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       init_wrappers();
       init_plugins3();
       init_Developers();
-      import_react28 = __toESM(require_react());
+      import_react27 = __toESM(require_react());
       import_react_native51 = __toESM(require_react_native());
       init_settings24();
       init_storage31();
@@ -29221,7 +29137,7 @@ ${ruleJson}
     var settings3 = useCloudSyncSettings();
     var auth = useAuthorizationStore2();
     var cache = useCacheStore2();
-    var [isBusy, setBusy] = import_react29.default.useState(null);
+    var [isBusy, setBusy] = import_react28.default.useState(null);
     var handleAuth = () => _async_to_generator(function* () {
       showAuthModal_default2();
     })();
@@ -29356,7 +29272,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react29, import_react_native52;
+  var import_react28, import_react_native52;
   var init_CloudSync = __esm({
     "src/rain/pages/CloudSync/index.tsx"() {
       "use strict";
@@ -29375,7 +29291,7 @@ ${ruleJson}
       init_storage34();
       init_AuthorizationStore2();
       init_CacheStore2();
-      import_react29 = __toESM(require_react());
+      import_react28 = __toESM(require_react());
       import_react_native52 = __toESM(require_react_native());
     }
   });
@@ -30208,7 +30124,7 @@ ${ruleJson}
     return hasUpdate;
   }
   function Updater() {
-    var [isCheckingForUpdates, setIsCheckingForUpdates] = (0, import_react30.useState)(false);
+    var [isCheckingForUpdates, setIsCheckingForUpdates] = (0, import_react29.useState)(false);
     _setIsChecking = setIsCheckingForUpdates;
     var debugInfo2 = getDebugInfo();
     return /* @__PURE__ */ jsx(import_react_native56.ScrollView, {
@@ -30272,7 +30188,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react30, import_react_native56, _setIsChecking;
+  var import_react29, import_react_native56, _setIsChecking;
   var init_Updater = __esm({
     "src/rain/pages/Updater/index.tsx"() {
       "use strict";
@@ -30290,7 +30206,7 @@ ${ruleJson}
       init_i18n();
       init_info();
       init_components();
-      import_react30 = __toESM(require_react());
+      import_react29 = __toESM(require_react());
       import_react_native56 = __toESM(require_react_native());
       _setIsChecking = null;
     }
@@ -30316,7 +30232,7 @@ ${ruleJson}
 
   // src/plugins/_core/errorboundary/ErrorComponentStackCard.tsx
   function ErrorComponentStackCard(props) {
-    var [collapsed, setCollapsed] = (0, import_react31.useState)(true);
+    var [collapsed, setCollapsed] = (0, import_react30.useState)(true);
     var stack;
     try {
       stack = parseComponentStack(props.componentStack);
@@ -30399,7 +30315,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react31, import_react_native57;
+  var import_react30, import_react_native57;
   var init_ErrorComponentStackCard = __esm({
     "src/plugins/_core/errorboundary/ErrorComponentStackCard.tsx"() {
       "use strict";
@@ -30409,7 +30325,7 @@ ${ruleJson}
       init_assets();
       init_common();
       init_components();
-      import_react31 = __toESM(require_react());
+      import_react30 = __toESM(require_react());
       import_react_native57 = __toESM(require_react_native());
       init_stack();
     }
@@ -30554,7 +30470,7 @@ ${ruleJson}
 
   // src/plugins/_core/errorboundary/ErrorStackCard.tsx
   function ErrorStackCard(props) {
-    var [collapsed, setCollapsed] = (0, import_react32.useState)(true);
+    var [collapsed, setCollapsed] = (0, import_react31.useState)(true);
     var stack;
     try {
       var parsedErrorStack = parseErrorStack(props.error.stack);
@@ -30620,7 +30536,7 @@ ${ruleJson}
     });
   }
   function Line(props) {
-    var [collapsed, setCollapsed] = (0, import_react32.useState)(true);
+    var [collapsed, setCollapsed] = (0, import_react31.useState)(true);
     return /* @__PURE__ */ jsxs(import_react_native59.Pressable, {
       onPress: () => setCollapsed((v2) => !v2),
       children: [
@@ -30650,7 +30566,7 @@ ${ruleJson}
       ]
     }, props.id);
   }
-  var import_react32, import_react_native59;
+  var import_react31, import_react_native59;
   var init_ErrorStackCard = __esm({
     "src/plugins/_core/errorboundary/ErrorStackCard.tsx"() {
       "use strict";
@@ -30660,7 +30576,7 @@ ${ruleJson}
       init_assets();
       init_common();
       init_components();
-      import_react32 = __toESM(require_react());
+      import_react31 = __toESM(require_react());
       import_react_native59 = __toESM(require_react_native());
       init_ErrorCard2();
       init_parseErrorStack();
@@ -31334,11 +31250,11 @@ ${ruleJson}
     var Loaded = null;
     Page = () => {
       var navigation2 = NavigationNative.useNavigation();
-      var [Component, setComponent] = import_react33.default.useState(() => Loaded);
-      import_react33.default.useEffect(() => void navigation2.setOptions({
+      var [Component, setComponent] = import_react32.default.useState(() => Loaded);
+      import_react32.default.useEffect(() => void navigation2.setOptions({
         title: row.title()
       }), []);
-      import_react33.default.useEffect(() => {
+      import_react32.default.useEffect(() => {
         if (Component) return;
         row.render().then((m2) => {
           Loaded = m2.default;
@@ -31440,7 +31356,7 @@ ${ruleJson}
       return ret;
     }));
   }
-  var import_react33, routePages, settingConstants, createListModule;
+  var import_react32, routePages, settingConstants, createListModule;
   var init_tabs = __esm({
     "src/plugins/_core/settings/patches/tabs.tsx"() {
       "use strict";
@@ -31452,7 +31368,7 @@ ${ruleJson}
       init_common();
       init_components();
       init_wrappers();
-      import_react33 = __toESM(require_react());
+      import_react32 = __toESM(require_react());
       init_settings28();
       init_shared2();
       routePages = /* @__PURE__ */ new Map();
@@ -31800,7 +31716,7 @@ ${ruleJson}
       if (!user?.avatar) return void 0;
       return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
     };
-    var randomHearts = (0, import_react34.useMemo)(() => {
+    var randomHearts = (0, import_react33.useMemo)(() => {
       var _loop2 = function(i2) {
         var size = minSize + Math.random() * (maxSize - minSize);
         var top = void 0;
@@ -31935,7 +31851,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react34, import_react_native65, showUserProfileActionSheet5, maybeFetchUser2, developers, donators;
+  var import_react33, import_react_native65, showUserProfileActionSheet5, maybeFetchUser2, developers, donators;
   var init_Developers2 = __esm({
     "src/rain/pages/Rain/Developers.tsx"() {
       "use strict";
@@ -31951,7 +31867,7 @@ ${ruleJson}
       init_components();
       init_stores();
       init_Developers();
-      import_react34 = __toESM(require_react());
+      import_react33 = __toESM(require_react());
       import_react_native65 = __toESM(require_react_native());
       showUserProfileActionSheet5 = findByName("showUserProfileActionSheet");
       ({ getUser: maybeFetchUser2 } = lazyDestructure(() => findByProps("getUser", "fetchProfile")));
@@ -33026,9 +32942,9 @@ ${ruleJson}
 
   // src/rain/pages/Addon/AddonPage.tsx
   function InputAlert2(props) {
-    var [value, setValue] = React27.useState("");
-    var [error, setError] = React27.useState("");
-    var [isFetching, setIsFetching] = React27.useState(false);
+    var [value, setValue] = React26.useState("");
+    var [error, setError] = React26.useState("");
+    var [isFetching, setIsFetching] = React26.useState(false);
     function onConfirmWrapper() {
       setIsFetching(true);
       props.fetchFn(value).then(() => dismissAlert("AddonInputAlert")).catch((e) => e instanceof Error ? setError(e.message) : String(e)).finally(() => setIsFetching(false));
@@ -33090,24 +33006,24 @@ ${ruleJson}
   }
   function AddonPage({ CardComponent: CardComponent2, ...props }) {
     var settings3 = useSettings();
-    var [search, setSearch] = React27.useState("");
-    var [compact, setCompact] = React27.useState(settings3.compactMode ?? false);
-    var [sortFn, setSortFn] = React27.useState(() => props.defaultSortKey && props.sortOptions ? props.sortOptions[props.defaultSortKey] : null);
-    var [selectedSortKey, setSelectedSortKey] = React27.useState(props.defaultSortKey || "");
-    var [activeFilterKeys, setActiveFilterKeys] = React27.useState(props.defaultFilterKey ? [
+    var [search, setSearch] = React26.useState("");
+    var [compact, setCompact] = React26.useState(settings3.compactMode ?? false);
+    var [sortFn, setSortFn] = React26.useState(() => props.defaultSortKey && props.sortOptions ? props.sortOptions[props.defaultSortKey] : null);
+    var [selectedSortKey, setSelectedSortKey] = React26.useState(props.defaultSortKey || "");
+    var [activeFilterKeys, setActiveFilterKeys] = React26.useState(props.defaultFilterKey ? [
       props.defaultFilterKey
     ] : []);
     var { bottom: bottomInset } = useSafeAreaInsets();
     var { right: rightInset } = useSafeAreaInsets();
     var navigation2 = NavigationNative.useNavigation();
-    var filterFn = (0, import_react35.useMemo)(() => {
+    var filterFn = (0, import_react34.useMemo)(() => {
       if (activeFilterKeys.length === 0) return null;
       return (item) => activeFilterKeys.every((key) => props.filterOptions[key](item));
     }, [
       activeFilterKeys,
       props.filterOptions
     ]);
-    (0, import_react35.useEffect)(() => {
+    (0, import_react34.useEffect)(() => {
       if (props.OptionsActionSheetComponent) {
         navigation2.setOptions({
           headerRight: () => /* @__PURE__ */ jsx(IconButton, {
@@ -33121,12 +33037,12 @@ ${ruleJson}
     }, [
       navigation2
     ]);
-    (0, import_react35.useEffect)(() => {
+    (0, import_react34.useEffect)(() => {
       setCompact(settings3.compactMode ?? false);
     }, [
       settings3.compactMode
     ]);
-    (0, import_react35.useEffect)(() => {
+    (0, import_react34.useEffect)(() => {
       var sortKey = props.defaultSortKey;
       if (props.sortOptions && sortKey && props.sortOptions[sortKey]) {
         setSortFn(() => props.sortOptions[sortKey]);
@@ -33136,7 +33052,7 @@ ${ruleJson}
       props.sortOptions,
       props.defaultSortKey
     ]);
-    var results = (0, import_react35.useMemo)(() => {
+    var results = (0, import_react34.useMemo)(() => {
       var values = props.items;
       if (props.resolveItem) values = values.map(props.resolveItem).filter(isNotNil);
       var items = values.filter((i) => isNotNil(i) && typeof i === "object");
@@ -33154,7 +33070,7 @@ ${ruleJson}
       filterFn,
       search
     ]);
-    var onInstallPress = (0, import_react35.useCallback)(() => {
+    var onInstallPress = (0, import_react34.useCallback)(() => {
       if (!props.installAction) return () => {
       };
       var { label, onPress, fetchFn } = props.installAction;
@@ -33169,7 +33085,7 @@ ${ruleJson}
     }, [
       props.installAction
     ]);
-    var onInstallBrowserPress = (0, import_react35.useCallback)(() => {
+    var onInstallBrowserPress = (0, import_react34.useCallback)(() => {
       if (!props.installBrowserAction) return () => {
       };
       var { label, onPress, fetchFn } = props.installBrowserAction;
@@ -33184,7 +33100,7 @@ ${ruleJson}
     }, [
       props.installBrowserAction
     ]);
-    var SortAndFilterActionSheet = React27.useCallback(({ sortKey, filterKeys }) => /* @__PURE__ */ jsxs(ActionSheet, {
+    var SortAndFilterActionSheet = React26.useCallback(({ sortKey, filterKeys }) => /* @__PURE__ */ jsxs(ActionSheet, {
       children: [
         props.sortOptions && /* @__PURE__ */ jsx(TableRadioGroup, {
           title: "Sort By",
@@ -33369,7 +33285,7 @@ ${ruleJson}
       ]
     });
   }
-  var import_fuzzysort, import_react35, React27, import_react_native67;
+  var import_fuzzysort, import_react34, React26, import_react_native67;
   var init_AddonPage = __esm({
     "src/rain/pages/Addon/AddonPage.tsx"() {
       "use strict";
@@ -33387,8 +33303,8 @@ ${ruleJson}
       init_components();
       init_dist();
       import_fuzzysort = __toESM(require_fuzzysort());
-      import_react35 = __toESM(require_react());
-      React27 = __toESM(require_react());
+      import_react34 = __toESM(require_react());
+      React26 = __toESM(require_react());
       import_react_native67 = __toESM(require_react_native());
     }
   });
@@ -33472,8 +33388,8 @@ ${ruleJson}
     });
   }
   function PluginCard({ result, item: plugin, compact }) {
-    var [toggling, setToggling] = (0, import_react36.useState)(false);
-    var cardContextValue = (0, import_react36.useMemo)(() => ({
+    var [toggling, setToggling] = (0, import_react35.useState)(false);
+    var cardContextValue = (0, import_react35.useMemo)(() => ({
       plugin,
       result
     }), [
@@ -33663,7 +33579,7 @@ ${ruleJson}
       })
     });
   }
-  var import_chroma_js8, import_react36, import_react_native68, CardContext, useCardContext, Actions;
+  var import_chroma_js8, import_react35, import_react_native68, CardContext, useCardContext, Actions;
   var init_PluginCard = __esm({
     "src/rain/pages/Plugins/components/PluginCard.tsx"() {
       "use strict";
@@ -33681,10 +33597,10 @@ ${ruleJson}
       init_components();
       init_plugins3();
       import_chroma_js8 = __toESM(require_chroma_js());
-      import_react36 = __toESM(require_react());
+      import_react35 = __toESM(require_react());
       import_react_native68 = __toESM(require_react_native());
-      CardContext = /* @__PURE__ */ (0, import_react36.createContext)(null);
-      useCardContext = () => (0, import_react36.useContext)(CardContext);
+      CardContext = /* @__PURE__ */ (0, import_react35.createContext)(null);
+      useCardContext = () => (0, import_react35.useContext)(CardContext);
       Actions = () => {
         var { plugin } = useCardContext();
         var navigation2 = NavigationNative.useNavigation();
@@ -33751,7 +33667,7 @@ ${ruleJson}
         return Number(a.isEnabled()) - Number(b3.isEnabled());
       }
     };
-    var filteredItems2 = (0, import_react37.useMemo)(() => {
+    var filteredItems2 = (0, import_react36.useMemo)(() => {
       return items.filter((p) => {
         if (p.devOnly && !developerSettings) {
           return false;
@@ -33799,7 +33715,7 @@ ${ruleJson}
   }
   function Plugins() {
     useSettings();
-    var items = (0, import_react37.useMemo)(() => {
+    var items = (0, import_react36.useMemo)(() => {
       return Array.from(pluginInstances.values()).map(unifyRainPlugin);
     }, []);
     return /* @__PURE__ */ jsx(PluginPage, {
@@ -33813,7 +33729,7 @@ ${ruleJson}
       }
     });
   }
-  var import_react37;
+  var import_react36;
   var init_Plugins = __esm({
     "src/rain/pages/Plugins/index.tsx"() {
       "use strict";
@@ -33825,7 +33741,7 @@ ${ruleJson}
       init_i18n();
       init_plugins3();
       init_AddonPage();
-      import_react37 = __toESM(require_react());
+      import_react36 = __toESM(require_react());
       init_PluginCard();
       init_rain();
     }
@@ -34455,11 +34371,11 @@ ${ruleJson}
     });
   }
   function ThemeInfoActionSheet({ theme, navigation: navigation2 }) {
-    var [themeState, setThemeState] = (0, import_react38.useState)({
+    var [themeState, setThemeState] = (0, import_react37.useState)({
       ...theme
     });
-    var [loading, setLoading] = (0, import_react38.useState)(false);
-    (0, import_react38.useEffect)(() => {
+    var [loading, setLoading] = (0, import_react37.useState)(false);
+    (0, import_react37.useEffect)(() => {
       var interval = setInterval(() => {
         setThemeState({
           ...theme
@@ -34591,7 +34507,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react38, import_react_native71, showUserProfileActionSheet6, maybeFetchUser3;
+  var import_react37, import_react_native71, showUserProfileActionSheet6, maybeFetchUser3;
   var init_ThemeInfoActionSheet = __esm({
     "src/rain/pages/Themes/sheets/ThemeInfoActionSheet.tsx"() {
       "use strict";
@@ -34611,7 +34527,7 @@ ${ruleJson}
       init_components();
       init_stores();
       init_themes();
-      import_react38 = __toESM(require_react());
+      import_react37 = __toESM(require_react());
       import_react_native71 = __toESM(require_react_native());
       showUserProfileActionSheet6 = findByNameLazy("showUserProfileActionSheet");
       ({ getUser: maybeFetchUser3 } = lazyDestructure(() => findByProps("getUser", "fetchProfile")));
@@ -34627,12 +34543,12 @@ ${ruleJson}
     }
   }
   function ThemeCard({ item: theme, compact }) {
-    var isSelected = useThemes(React29.useCallback((state2) => state2.themes[theme.id]?.selected ?? false, [
+    var isSelected = useThemes(React28.useCallback((state2) => state2.themes[theme.id]?.selected ?? false, [
       theme.id
     ]));
     var safeModeEnabled = useSettings((state2) => state2.safeMode);
     var { fetchTheme: fetchTheme2, removeTheme: removeTheme2 } = useThemes.getState();
-    var [removed, setRemoved] = React29.useState(false);
+    var [removed, setRemoved] = React28.useState(false);
     if (removed) return null;
     var manifest = theme.data;
     var isSpec3 = manifest.spec === 3;
@@ -34670,7 +34586,7 @@ ${ruleJson}
       ]
     });
   }
-  var React29;
+  var React28;
   var init_ThemeCard = __esm({
     "src/rain/pages/Themes/ThemeCard.tsx"() {
       "use strict";
@@ -34682,7 +34598,7 @@ ${ruleJson}
       init_common();
       init_themes();
       init_AddonCard();
-      React29 = __toESM(require_react());
+      React28 = __toESM(require_react());
     }
   });
 
@@ -35357,8 +35273,8 @@ ${ruleJson}
   }
   function FontsExtractor({ fonts: fonts2, setName }) {
     var themeFonts = currentTheme.fonts;
-    var [fontName, setFontName] = (0, import_react39.useState)(guessFontName(Object.values(themeFonts)));
-    var [error, setError] = (0, import_react39.useState)(void 0);
+    var [fontName, setFontName] = (0, import_react38.useState)(guessFontName(Object.values(themeFonts)));
+    var [error, setError] = (0, import_react38.useState)(void 0);
     return /* @__PURE__ */ jsxs(import_react_native73.View, {
       style: {
         padding: 8,
@@ -35406,9 +35322,9 @@ ${ruleJson}
     });
   }
   function JsonFontImporter({ fonts: fonts2, setName, setSource }) {
-    var [fontLink, setFontLink] = (0, import_react39.useState)("");
-    var [saving, setSaving] = (0, import_react39.useState)(false);
-    var [error, setError] = (0, import_react39.useState)(void 0);
+    var [fontLink, setFontLink] = (0, import_react38.useState)("");
+    var [saving, setSaving] = (0, import_react38.useState)(false);
+    var [error, setError] = (0, import_react38.useState)(void 0);
     return /* @__PURE__ */ jsxs(import_react_native73.View, {
       style: {
         padding: 8,
@@ -35452,8 +35368,8 @@ ${ruleJson}
     });
   }
   function EntryEditorActionSheet(props) {
-    var [familyName, setFamilyName] = (0, import_react39.useState)(props.name);
-    var [fontUrl2, setFontUrl] = (0, import_react39.useState)(props.fontEntries[props.name]);
+    var [familyName, setFamilyName] = (0, import_react38.useState)(props.name);
+    var [fontUrl2, setFontUrl] = (0, import_react38.useState)(props.fontEntries[props.name]);
     return /* @__PURE__ */ jsxs(import_react_native73.View, {
       style: {
         padding: 8,
@@ -35508,10 +35424,10 @@ ${ruleJson}
     }), "FontEditorActionSheet");
   }
   function NewEntryRow({ fontName, fontEntry }) {
-    var nameRef = (0, import_react39.useRef)(void 0);
-    var urlRef = (0, import_react39.useRef)(void 0);
-    var [nameSet, setNameSet] = (0, import_react39.useState)(false);
-    var [error, setError] = (0, import_react39.useState)();
+    var nameRef = (0, import_react38.useRef)(void 0);
+    var urlRef = (0, import_react38.useRef)(void 0);
+    var [nameSet, setNameSet] = (0, import_react38.useState)(false);
+    var [error, setError] = (0, import_react38.useState)();
     return /* @__PURE__ */ jsxs(import_react_native73.View, {
       style: {
         flexDirection: "row",
@@ -35574,11 +35490,11 @@ ${ruleJson}
   }
   function FontEditor(props) {
     var currentFonts = useFonts((state2) => state2.fonts);
-    var [name, setName] = (0, import_react39.useState)(props.name);
-    var [source, setSource] = (0, import_react39.useState)(props.name && currentFonts[props.name]?.source);
-    var [importing, setIsImporting] = (0, import_react39.useState)(false);
-    var [errors, setErrors] = (0, import_react39.useState)();
-    var memoEntry = (0, import_react39.useMemo)(() => {
+    var [name, setName] = (0, import_react38.useState)(props.name);
+    var [source, setSource] = (0, import_react38.useState)(props.name && currentFonts[props.name]?.source);
+    var [importing, setIsImporting] = (0, import_react38.useState)(false);
+    var [errors, setErrors] = (0, import_react38.useState)();
+    var memoEntry = (0, import_react38.useMemo)(() => {
       return v.from(props.name ? {
         ...currentFonts[props.name]?.main
       } : {});
@@ -35588,7 +35504,7 @@ ${ruleJson}
     ]);
     var fontEntries = memoEntry;
     var navigation2 = NavigationNative.useNavigation();
-    var [, forceUpdate] = (0, import_react39.useReducer)(() => ({}), 0);
+    var [, forceUpdate] = (0, import_react38.useReducer)(() => ({}), 0);
     return /* @__PURE__ */ jsx(import_react_native73.ScrollView, {
       style: {
         flex: 1
@@ -35764,7 +35680,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react39, import_react_native73, actionSheet2, openAlert2, AlertModal3, AlertActionButton3;
+  var import_react38, import_react_native73, actionSheet2, openAlert2, AlertModal3, AlertActionButton3;
   var init_FontEditor = __esm({
     "src/rain/pages/Fonts/FontEditor.tsx"() {
       "use strict";
@@ -35782,7 +35698,7 @@ ${ruleJson}
       init_components();
       init_wrappers();
       init_fonts();
-      import_react39 = __toESM(require_react());
+      import_react38 = __toESM(require_react());
       import_react_native73 = __toESM(require_react_native());
       actionSheet2 = findByPropsLazy("hideActionSheet");
       ({ openAlert: openAlert2 } = lazyDestructure(() => findByProps("openAlert", "dismissAlert")));
@@ -35800,21 +35716,21 @@ ${ruleJson}
 
   // src/rain/pages/Fonts/FontCard.tsx
   function FontPreview({ font }) {
-    var [loaded, setLoaded] = (0, import_react40.useState)(false);
-    var [WebView, setWebView] = (0, import_react40.useState)(null);
-    var [isReady, setIsReady] = (0, import_react40.useState)(false);
+    var [loaded, setLoaded] = (0, import_react39.useState)(false);
+    var [WebView, setWebView] = (0, import_react39.useState)(null);
+    var [isReady, setIsReady] = (0, import_react39.useState)(false);
     var styles5 = useStyles14();
-    var [fontUri, setFontUri] = (0, import_react40.useState)(null);
+    var [fontUri, setFontUri] = (0, import_react39.useState)(null);
     var TEXT_DEFAULT = useToken2(tokens.colors.TEXT_DEFAULT);
     var { fontFamily: fontFamilyList, fontSize } = TextStyleSheet["text-md/medium"];
     var fontFamily = fontFamilyList.split(/,/g)[0];
-    (0, import_react40.useEffect)(() => {
+    (0, import_react39.useEffect)(() => {
       var webViewModule = findByProps("WebView");
       if (webViewModule?.WebView) {
         setWebView(() => webViewModule.WebView);
       }
     }, []);
-    (0, import_react40.useEffect)(() => {
+    (0, import_react39.useEffect)(() => {
       var getFontUri = () => _async_to_generator(function* () {
         var url2 = font.main[fontFamily];
         if (!url2) return;
@@ -35836,7 +35752,7 @@ ${ruleJson}
       font,
       fontFamily
     ]);
-    (0, import_react40.useEffect)(() => {
+    (0, import_react39.useEffect)(() => {
       if (WebView && fontUri) {
         setIsReady(true);
       }
@@ -35844,7 +35760,7 @@ ${ruleJson}
       WebView,
       fontUri
     ]);
-    var props = (0, import_react40.useMemo)(() => ({
+    var props = (0, import_react39.useMemo)(() => ({
       family: fontUri,
       size: fontSize * import_react_native74.PixelRatio.getFontScale(),
       color: TEXT_DEFAULT,
@@ -36013,7 +35929,7 @@ ${ruleJson}
       })
     });
   }
-  var import_react40, import_react_native74, useToken2, useStyles14;
+  var import_react39, import_react_native74, useToken2, useStyles14;
   var init_FontCard = __esm({
     "src/rain/pages/Fonts/FontCard.tsx"() {
       "use strict";
@@ -36032,7 +35948,7 @@ ${ruleJson}
       init_common();
       init_components();
       init_fonts();
-      import_react40 = __toESM(require_react());
+      import_react39 = __toESM(require_react());
       import_react_native74 = __toESM(require_react_native());
       init_FontEditor();
       init_preview();
@@ -36254,10 +36170,10 @@ Type: ${asset.type}`,
 
   // src/rain/pages/Developer/AssetBrowser.tsx
   function AssetBrowser() {
-    var [search, setSearch] = (0, import_react41.useState)("");
-    var [updateTick, setUpdateTick] = (0, import_react41.useState)(0);
+    var [search, setSearch] = (0, import_react40.useState)("");
+    var [updateTick, setUpdateTick] = (0, import_react40.useState)(0);
     var navigation2 = NavigationNative.useNavigation();
-    (0, import_react41.useEffect)(() => {
+    (0, import_react40.useEffect)(() => {
       navigation2.setOptions({
         title: Strings.ASSET_BROWSER
       });
@@ -36266,7 +36182,7 @@ Type: ${asset.type}`,
     ]);
     var settings3 = useAssetBrowserSettings();
     var enabledFilters = settings3.enabledFilters;
-    var getFilteredAssets = (0, import_react41.useCallback)(() => {
+    var getFilteredAssets = (0, import_react40.useCallback)(() => {
       return Array.from(iterateAssets()).filter((asset) => {
         var type = String(asset.type ?? "").toLowerCase();
         return enabledFilters[type] === true;
@@ -36275,7 +36191,7 @@ Type: ${asset.type}`,
       enabledFilters,
       updateTick
     ]);
-    var all = (0, import_react41.useMemo)(() => getFilteredAssets(), [
+    var all = (0, import_react40.useMemo)(() => getFilteredAssets(), [
       getFilteredAssets
     ]);
     var toggleFilter = (filterId) => {
@@ -36377,7 +36293,7 @@ Type: ${asset.type}`,
       })
     });
   }
-  var import_react41, import_react_native76, IMAGE_FILES, TEXT_FILES;
+  var import_react40, import_react_native76, IMAGE_FILES, TEXT_FILES;
   var init_AssetBrowser = __esm({
     "src/rain/pages/Developer/AssetBrowser.tsx"() {
       "use strict";
@@ -36391,7 +36307,7 @@ Type: ${asset.type}`,
       init_common();
       init_components();
       init_i18n();
-      import_react41 = __toESM(require_react());
+      import_react40 = __toESM(require_react());
       import_react_native76 = __toESM(require_react_native());
       init_AssetDisplay();
       IMAGE_FILES = [
@@ -36449,10 +36365,10 @@ Type: ${asset.type}`,
   function Developer() {
     var settings3 = useSettings();
     var loaderConfig = useLoaderConfig();
-    var [isDebuggerConnected, setIsDebuggerConnected] = (0, import_react42.useState)(isConnectedToDebugger());
+    var [isDebuggerConnected, setIsDebuggerConnected] = (0, import_react41.useState)(isConnectedToDebugger());
     var styles5 = useStyles15();
     var navigation2 = NavigationNative.useNavigation();
-    (0, import_react42.useEffect)(() => {
+    (0, import_react41.useEffect)(() => {
       var interval = setInterval(() => {
         var connected = isConnectedToDebugger();
         if (connected !== isDebuggerConnected) setIsDebuggerConnected(connected);
@@ -36670,7 +36586,7 @@ Type: ${asset.type}`,
       })
     });
   }
-  var import_react42, import_react_native77, useStyles15;
+  var import_react41, import_react_native77, useStyles15;
   var init_Developer = __esm({
     "src/rain/pages/Developer/index.tsx"() {
       "use strict";
@@ -36689,7 +36605,7 @@ Type: ${asset.type}`,
       init_common();
       init_components();
       init_wrappers();
-      import_react42 = __toESM(require_react());
+      import_react41 = __toESM(require_react());
       import_react_native77 = __toESM(require_react_native());
       init_AssetBrowser();
       useStyles15 = createStyles({
@@ -36785,7 +36701,7 @@ Type: ${asset.type}`,
     patchTabsUI(unpatches7);
     return () => unpatches7.forEach((u) => u());
   }
-  var import_react43, import_react_native78, settings_default7, registeredSections;
+  var import_react42, import_react_native78, settings_default7, registeredSections;
   var init_settings28 = __esm({
     "src/plugins/_core/settings/index.tsx"() {
       "use strict";
@@ -36802,7 +36718,7 @@ Type: ${asset.type}`,
       init_Developers();
       init_i18n();
       init_Updater();
-      import_react43 = __toESM(require_react());
+      import_react42 = __toESM(require_react());
       import_react_native78 = __toESM(require_react_native());
       init_tabs();
       init_settings27();
