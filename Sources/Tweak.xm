@@ -22,14 +22,66 @@ static LoaderConfig  *loaderConfig;
 static NSTimeInterval shakeStartTime = 0;
 static BOOL           isShaking      = NO;
 
-static NSURL *resolveDownloadURL(void)
+#define RAIN_RELEASE_BASE @"https://codeberg.org/raincord/rain/releases/download/latest/"
+
+// Hermes bytecode version of the running Discord build (0 = unknown). Rain's
+// precompiled bundle only runs on a matching version, so newer Discord builds
+// need a different .hbc or the plain JS bundle.
+static int  gHermesBytecodeVersion = 0;
+static BOOL gPromptRestartOnDownload = NO;
+
+static int readHermesBytecodeVersion(jsi::Runtime &runtime)
+{
+    try
+    {
+        jsi::Value internal = runtime.global().getProperty(runtime, "HermesInternal");
+        if (!internal.isObject()) return 0;
+        jsi::Object internalObj = internal.asObject(runtime);
+
+        jsi::Value getProps = internalObj.getProperty(runtime, "getRuntimeProperties");
+        if (!getProps.isObject() || !getProps.asObject(runtime).isFunction(runtime)) return 0;
+
+        jsi::Value props =
+            getProps.asObject(runtime).asFunction(runtime).callWithThis(runtime, internalObj);
+        if (!props.isObject()) return 0;
+
+        jsi::Value version = props.asObject(runtime).getProperty(runtime, "Bytecode Version");
+        return version.isNumber() ? (int)version.getNumber() : 0;
+    }
+    catch (const std::exception &e)
+    {
+        BunnyLog(@"readHermesBytecodeVersion: %s", e.what());
+        return 0;
+    }
+}
+
+// Returns the bytecode version stored in a Hermes bundle header, or 0 for plain JS.
+static int bundleBytecodeVersion(NSData *data)
+{
+    if (data.length < 12) return 0;
+    const uint8_t *bytes = (const uint8_t *)data.bytes;
+    if (!(bytes[0] == 0xC6 && bytes[1] == 0x1F && bytes[2] == 0xBC && bytes[3] == 0x03)) return 0;
+    uint32_t version;
+    memcpy(&version, bytes + 8, sizeof(version));
+    return (int)version;
+}
+
+static NSArray<NSURL *> *resolveDownloadURLs(void)
 {
     LoaderConfig *fresh = [LoaderConfig getLoaderConfig];
     if (fresh.customLoadUrlEnabled && fresh.customLoadUrl)
     {
-        return fresh.customLoadUrl;
+        return @[ fresh.customLoadUrl ];
     }
-    return [NSURL URLWithString:@"https://codeberg.org/raincord/rain/releases/download/latest/rain.98.hbc"];
+
+    NSMutableArray<NSURL *> *urls = [NSMutableArray array];
+    if (gHermesBytecodeVersion > 0)
+    {
+        NSString *hbc = [NSString stringWithFormat:@"rain.%d.hbc", gHermesBytecodeVersion];
+        [urls addObject:[NSURL URLWithString:[RAIN_RELEASE_BASE stringByAppendingString:hbc]]];
+    }
+    [urls addObject:[NSURL URLWithString:[RAIN_RELEASE_BASE stringByAppendingString:@"rain.js"]]];
+    return urls;
 }
 
 static dispatch_queue_t fsQueue(void)
@@ -42,12 +94,13 @@ static dispatch_queue_t fsQueue(void)
     return queue;
 }
 
-static void downloadBundleForNextLaunch(NSURL *rainDir)
+static void downloadBundleFromURLs(NSURL *rainDir, NSArray<NSURL *> *urls)
 {
-    NSURL *bundleFileURL = [rainDir URLByAppendingPathComponent:@"bundle.js"];
-    NSURL *targetURL = resolveDownloadURL();
+    if (urls.count == 0) return;
 
-    if (!targetURL) return;
+    NSURL *bundleFileURL = [rainDir URLByAppendingPathComponent:@"bundle.js"];
+    NSURL *targetURL = urls.firstObject;
+    NSArray<NSURL *> *remaining = [urls subarrayWithRange:NSMakeRange(1, urls.count - 1)];
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:targetURL
                                                        cachePolicy:NSURLRequestReloadIgnoringLocalAndRemoteCacheData
@@ -80,6 +133,24 @@ static void downloadBundleForNextLaunch(NSURL *rainDir)
                     else
                         [fm removeItemAtURL:etagFileURL error:nil];
                 });
+                BunnyLog(@"downloadBundleForNextLaunch: saved %@", targetURL.lastPathComponent);
+
+                // First install: Rain only runs from the cached bundle, so ask for a restart
+                // instead of leaving Discord without Rain and no explanation.
+                if (gPromptRestartOnDownload)
+                {
+                    gPromptRestartOnDownload = NO;
+                    showErrorAlert(@"Rain Downloaded", @"Discord will restart to load Rain.", ^{
+                        reloadApp(getKeyWindow().rootViewController);
+                    });
+                }
+            }
+            else if (http.statusCode != 304 && remaining.count > 0)
+            {
+                BunnyLog(@"downloadBundleForNextLaunch: %@ returned %ld, trying %@",
+                         targetURL.lastPathComponent, (long)http.statusCode,
+                         remaining.firstObject.lastPathComponent);
+                downloadBundleFromURLs(rainDir, remaining);
             }
         }
         else if (error)
@@ -88,6 +159,11 @@ static void downloadBundleForNextLaunch(NSURL *rainDir)
         }
         [session finishTasksAndInvalidate];
     }] resume];
+}
+
+static void downloadBundleForNextLaunch(NSURL *rainDir)
+{
+    downloadBundleFromURLs(rainDir, resolveDownloadURLs());
 }
 
 typedef id (^BridgeHandler)(NSArray *args);
@@ -307,16 +383,47 @@ static void executePreloads(jsi::Runtime &runtime, NSURL *rainDir)
     NSURL *rainDir = getRainDirectory();
     injectPreBundle(runtime);
 
+    gHermesBytecodeVersion = readHermesBytecodeVersion(runtime);
+    BunnyLog(@"Discord Hermes bytecode version: %d", gHermesBytecodeVersion);
+
     NSURL *bundleFileURL = [rainDir URLByAppendingPathComponent:@"bundle.js"];
+    NSURL *etagFileURL   = [rainDir URLByAppendingPathComponent:@"etag.txt"];
     NSData *bundle = [NSData dataWithContentsOfURL:bundleFileURL];
+
+    // A bundle compiled for another Hermes version (e.g. cached before a Discord
+    // update) can never run; drop it so a compatible one is downloaded.
+    int bundleVersion = bundleBytecodeVersion(bundle);
+    if (bundleVersion > 0 && gHermesBytecodeVersion > 0 && bundleVersion != gHermesBytecodeVersion)
+    {
+        BunnyLog(@"Cached bundle is bytecode v%d, runtime is v%d; discarding", bundleVersion,
+                 gHermesBytecodeVersion);
+        [[NSFileManager defaultManager] removeItemAtURL:bundleFileURL error:nil];
+        [[NSFileManager defaultManager] removeItemAtURL:etagFileURL error:nil];
+        bundle = nil;
+    }
 
     if (bundle && bundle.length > 0)
     {
-        [JSI evaluate:bundle tag:@"rain:bundle" runtime:runtime];
-        executePreloads(runtime, rainDir);
+        if ([JSI evaluate:bundle tag:@"rain:bundle" runtime:runtime])
+        {
+            executePreloads(runtime, rainDir);
+        }
+        else
+        {
+            // Unusable bundle: remove it so the next launch fetches a fresh one. If the
+            // precompiled bytecode failed, fall back to the plain JS bundle instead of
+            // downloading the same .hbc again.
+            [[NSFileManager defaultManager] removeItemAtURL:bundleFileURL error:nil];
+            [[NSFileManager defaultManager] removeItemAtURL:etagFileURL error:nil];
+            NSArray<NSURL *> *urls = resolveDownloadURLs();
+            if (bundleVersion > 0 && urls.count > 1)
+                urls = @[ urls.lastObject ];
+            downloadBundleFromURLs(rainDir, urls);
+        }
     }
     else
     {
+        gPromptRestartOnDownload = YES;
         downloadBundleForNextLaunch(rainDir);
     }
 }
