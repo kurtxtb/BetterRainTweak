@@ -1,0 +1,40 @@
+From f23c073c244c10590d96df377247c1ea651dba10 Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 18:29:33 +0800
+Subject: [PATCH] fix(api): gracefully handle undefined targets in patcher
+
+---
+ src/api/patcher.ts | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/api/patcher.ts b/src/api/patcher.ts
+index 1e2403a..6fd3799 100644
+--- a/src/api/patcher.ts
++++ b/src/api/patcher.ts
+@@ -22,6 +22,11 @@ type AfterFn = PatchFn<(args: any[], ret: any) => unknown>;
+ 
+ function create(fn: Function) {
+     function patchFn(this: any, ...args: any[]) {
++        if (args[1] == null) {
++            console.warn(`[Rain Patcher] Attempted to patch "${args[0]}" on a null or undefined object.`);
++            return () => false;
++        }
++
+         if (typeof args[1][_patcherDelaySymbol] === "function") {
+             const delayCallback: DelayCallback = args[1][_patcherDelaySymbol];
+ 
+@@ -42,7 +47,10 @@ function create(fn: Function) {
+ 
+     function promisePatchFn(this: any, ...args: [any, Thenable, ...any]) {
+         const thenable = args[1];
+-        if (!thenable || !("then" in thenable)) throw new Error("target is not a then-able object");
++        if (thenable == null || typeof thenable.then !== "function") {
++            console.warn(`[Rain Patcher] Attempted to await-patch "${args[0]}" on a null, undefined, or invalid thenable object.`);
++            return () => false;
++        }
+ 
+         let cancel = false;
+         let unpatch = () => cancel = true;
+-- 
+2.55.0.windows.5
+

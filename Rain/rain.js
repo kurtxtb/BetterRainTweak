@@ -786,6 +786,10 @@
   });
   function create(fn) {
     function patchFn2(...args) {
+      if (args[1] == null) {
+        console.warn(`[Rain Patcher] Attempted to patch "${args[0]}" on a null or undefined object.`);
+        return () => false;
+      }
       if (typeof args[1][_patcherDelaySymbol] === "function") {
         var delayCallback = args[1][_patcherDelaySymbol];
         var cancel = false;
@@ -801,7 +805,10 @@
     }
     function promisePatchFn(...args) {
       var thenable = args[1];
-      if (!thenable || !("then" in thenable)) throw new Error("target is not a then-able object");
+      if (thenable == null || typeof thenable.then !== "function") {
+        console.warn(`[Rain Patcher] Attempted to await-patch "${args[0]}" on a null, undefined, or invalid thenable object.`);
+        return () => false;
+      }
       var cancel = false;
       var unpatch6 = () => cancel = true;
       thenable.then((target) => {
