@@ -33420,7 +33420,9 @@ ${ruleJson}
         }),
         props.installAction && /* @__PURE__ */ jsx(FloatingActionButton, {
           positionBottom: bottomInset + 8,
-          positionRight: rightInset + 86,
+          ...props.installBrowserAction ? {
+            positionRight: rightInset + 86
+          } : {},
           icon: findAssetId2("PlusLargeIcon"),
           onPress: onInstallPress
         })

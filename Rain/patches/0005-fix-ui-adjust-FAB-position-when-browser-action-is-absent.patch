@@ -1,0 +1,25 @@
+From 68f37944bfe63243f65eb807ace0be71ee9b100c Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 18:44:24 +0800
+Subject: [PATCH] fix(ui): adjust FAB position when browser action is absent
+
+---
+ src/rain/pages/Addon/AddonPage.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/rain/pages/Addon/AddonPage.tsx b/src/rain/pages/Addon/AddonPage.tsx
+index 4a51757..826689c 100644
+--- a/src/rain/pages/Addon/AddonPage.tsx
++++ b/src/rain/pages/Addon/AddonPage.tsx
+@@ -304,7 +304,7 @@ export default function AddonPage<T extends object>({ CardComponent, ...props }:
+             />}
+             {props.installAction && <FloatingActionButton
+                 positionBottom={bottomInset + 8}
+-                positionRight={rightInset + 86}
++                {...(props.installBrowserAction ? { positionRight: rightInset + 86 } : {})}
+                 icon={findAssetId("PlusLargeIcon")}
+                 onPress={onInstallPress}
+             />}
+-- 
+2.55.0.windows.5
+
