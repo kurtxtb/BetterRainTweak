@@ -1,0 +1,37 @@
+From 4c65dca9fc0b8265e3c7bea8e05cb62a52bf1b3e Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 14:14:25 +0800
+Subject: [PATCH] fix(cloudsync): resolve Card at render time
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/rain/pages/CloudSync/index.tsx | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/rain/pages/CloudSync/index.tsx b/src/rain/pages/CloudSync/index.tsx
+index 6080dd7..b7dc24e 100644
+--- a/src/rain/pages/CloudSync/index.tsx
++++ b/src/rain/pages/CloudSync/index.tsx
+@@ -10,9 +10,17 @@ import { useCloudSyncSettings } from "@plugins/_core/cloudsync/storage";
+ import { useAuthorizationStore } from "@plugins/_core/cloudsync/stores/AuthorizationStore";
+ import { useCacheStore } from "@plugins/_core/cloudsync/stores/CacheStore";
+ import React from "react";
+-import { ActivityIndicator,ScrollView } from "react-native";
++import { ActivityIndicator, ScrollView, View } from "react-native";
+ 
+-const { Card } = findByProps("Card");
++// Resolved at render time: this page is imported by a core plugin during startup,
++// before Discord's Card module is guaranteed to exist, and newer Discord builds
++// may not export it at all. A module-level lookup captured `undefined` and
++// crashed the whole settings screen.
++function Card({ children }: { children: React.ReactNode; }) {
++    const DiscordCard = findByProps("Card")?.Card;
++    if (DiscordCard) return <DiscordCard>{children}</DiscordCard>;
++    return <View style={{ gap: 12 }}>{children}</View>;
++}
+ 
+ export default function CloudSyncSettings() {
+     const settings = useCloudSyncSettings();
+-- 
+2.55.0.windows.5
+

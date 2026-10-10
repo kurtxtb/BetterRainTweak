@@ -386,6 +386,26 @@ static void executePreloads(jsi::Runtime &runtime, NSURL *rainDir)
     gHermesBytecodeVersion = readHermesBytecodeVersion(runtime);
     BunnyLog(@"Discord Hermes bytecode version: %d", gHermesBytecodeVersion);
 
+    // Prefer the Rain build shipped inside the tweak (Rain/rain.js, patched for the
+    // Discord version we target) unless a custom bundle URL is configured. Never fall
+    // through to the cached bundle after it ran: a half-initialised Rain plus a second
+    // copy on top is worse than no Rain.
+    LoaderConfig *config = [LoaderConfig getLoaderConfig];
+    if (!(config.customLoadUrlEnabled && config.customLoadUrl))
+    {
+        NSString *embeddedPath = [bunnyPatchesBundlePath stringByAppendingPathComponent:@"rain.js"];
+        NSData *embedded = [NSData dataWithContentsOfFile:embeddedPath];
+        if (embedded.length > 0)
+        {
+            if ([JSI evaluate:embedded tag:@"rain:bundle" runtime:runtime])
+                executePreloads(runtime, rainDir);
+            else
+                BunnyLog(@"Embedded Rain bundle failed to evaluate");
+            return;
+        }
+        BunnyLog(@"No embedded Rain bundle at %@, using downloaded bundle", embeddedPath);
+    }
+
     NSURL *bundleFileURL = [rainDir URLByAppendingPathComponent:@"bundle.js"];
     NSURL *etagFileURL   = [rainDir URLByAppendingPathComponent:@"etag.txt"];
     NSData *bundle = [NSData dataWithContentsOfURL:bundleFileURL];

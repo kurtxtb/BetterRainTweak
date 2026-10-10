@@ -28,6 +28,7 @@ before-all::
 	$(ECHO_NOTHING)sed -e 's/@PACKAGE_VERSION@/$(THEOS_PACKAGE_BASE_VERSION)/g' \
 		-e 's/@TWEAK_NAME@/$(TWEAK_NAME)/g' \
 		Sources/payload-base.template.js > Resources/payload-base.js$(ECHO_END)
+	$(ECHO_NOTHING)cp Rain/rain.js Resources/rain.js$(ECHO_END)
 
 after-stage::
 	$(ECHO_NOTHING)find $(THEOS_STAGING_DIR) -name ".DS_Store" -delete$(ECHO_END)
