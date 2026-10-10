@@ -30207,66 +30207,6 @@ ${ruleJson}
     }, []);
     return hasUpdate;
   }
-  function versionCheck() {
-    var version = Number(getDebugInfo().discord.build);
-    var supportedVersions;
-    if (import_react_native56.Platform.OS === "android") {
-      supportedVersions = 344013;
-    } else {
-      supportedVersions = 110861;
-    }
-    if (useLoaderConfig.getState().customLoadUrl?.enabled) return;
-    if (useSettings.getState().disableUpdateWarnings === true) return;
-    if (supportedVersions > version) {
-      openAlert("incompatible-version-alert", /* @__PURE__ */ jsx(AlertModal, {
-        title: Strings.INCOMPATIBLE_VERSION,
-        content: Strings.INCOMPATIBLE_VERSION_DESC,
-        actions: /* @__PURE__ */ jsxs(AlertActions, {
-          children: [
-            import_react_native56.Platform.OS === "android" && /* @__PURE__ */ jsx(AlertActionButton, {
-              text: Strings.OPEN_MANAGER,
-              variant: "primary",
-              onPress: () => {
-                import_react_native56.Linking.openURL("raincord://");
-              }
-            }),
-            import_react_native56.Platform.OS === "ios" && /* @__PURE__ */ jsx(AlertActionButton, {
-              text: Strings.IPA_DOWNLOAD,
-              variant: "primary",
-              onPress: () => {
-                import_react_native56.Linking.openURL("https://codeberg.org/raincord/RainTweak/releases");
-              }
-            }),
-            /* @__PURE__ */ jsx(AlertActionButton, {
-              text: Strings.CONTINUE_ANYWAYS,
-              variant: "destructive"
-            })
-          ]
-        })
-      }));
-    }
-    if (supportedVersions < version) {
-      openAlert("incompatible-version-alert", /* @__PURE__ */ jsx(AlertModal, {
-        title: Strings.INCOMPATIBLE_VERSION,
-        content: Strings.INCOMPATIBLE_VERSION_DESC,
-        actions: /* @__PURE__ */ jsxs(AlertActions, {
-          children: [
-            /* @__PURE__ */ jsx(AlertActionButton, {
-              text: Strings.UPDATE,
-              variant: "primary",
-              onPress: () => {
-                downloadUpdate();
-              }
-            }),
-            /* @__PURE__ */ jsx(AlertActionButton, {
-              text: Strings.CONTINUE_ANYWAYS,
-              variant: "destructive"
-            })
-          ]
-        })
-      }));
-    }
-  }
   function Updater() {
     var [isCheckingForUpdates, setIsCheckingForUpdates] = (0, import_react30.useState)(false);
     _setIsChecking = setIsCheckingForUpdates;
@@ -37576,7 +37516,6 @@ Type: ${asset.type}`,
       init_async_to_generator();
       init_i18n();
       init_plugins3();
-      init_Updater();
       init_debug();
       init_flux();
       init_jsx();
@@ -37599,7 +37538,6 @@ Type: ${asset.type}`,
         });
         globalThis.rain = lib_exports;
         initDebugger();
-        versionCheck();
       })());
     }
   });

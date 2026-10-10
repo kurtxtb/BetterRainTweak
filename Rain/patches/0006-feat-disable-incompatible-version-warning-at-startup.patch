@@ -1,0 +1,32 @@
+From 0b3a163f1c9115b62258742d602492279ea4af5c Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 18:47:28 +0800
+Subject: [PATCH] feat: disable incompatible version warning at startup
+
+---
+ src/index.ts | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/index.ts b/src/index.ts
+index 6d51eaa..2823e37 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,6 +1,5 @@
+ import { initFetchI18nStrings } from "@i18n";
+ import { initEagerPlugins, initPlugins } from "@plugins/index";
+-import { versionCheck } from "@rain/pages/Updater";
+ 
+ import { initDebugger, patchLogHook } from "./api/debug";
+ import { injectFluxInterceptor } from "./api/flux";
+@@ -26,7 +25,7 @@ export default async () => {
+ 
+     initDebugger();
+ 
+-    versionCheck();
++    // versionCheck();
+ };
+ 
+ export { initPlugins };
+-- 
+2.55.0.windows.5
+
