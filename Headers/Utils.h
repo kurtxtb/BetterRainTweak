@@ -15,6 +15,8 @@ NSURL      *getRainDirectory(void);
 NSURL      *getBundleBackupURL(void);
 UIColor    *hexToUIColor(NSString *hex);
 NSString   *getDeviceIdentifier(void);
+UIWindow   *getKeyWindow(void);
+UIViewController *getTopViewController(void);
 void        showErrorAlert(NSString *title, NSString *message, void (^completion)(void));
 void        reloadApp(UIViewController *viewController);
 void        deletePlugins(void);

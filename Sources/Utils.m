@@ -58,6 +58,63 @@ UIColor *hexToUIColor(NSString *hex) {
     return nil;
 }
 
+// UIApplication.windows / isKeyWindow are deprecated and unreliable once UIScene
+// lifecycle is mandatory (iOS 27), so look up windows through the connected scenes.
+UIWindow *getKeyWindow(void) {
+    UIApplication *app = [UIApplication sharedApplication];
+    UIWindow *fallback = nil;
+
+    for (UIScene *scene in app.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]])
+            continue;
+        if (scene.activationState != UISceneActivationStateForegroundActive &&
+            scene.activationState != UISceneActivationStateForegroundInactive)
+            continue;
+
+        for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+            if (w.isKeyWindow)
+                return w;
+            if (!fallback && w.rootViewController)
+                fallback = w;
+        }
+    }
+
+    if (fallback)
+        return fallback;
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    for (UIWindow *w in app.windows) {
+        if (w.isKeyWindow)
+            return w;
+    }
+    return app.windows.firstObject;
+#pragma clang diagnostic pop
+}
+
+UIViewController *getTopViewController(void) {
+    UIViewController *vc = getKeyWindow().rootViewController;
+    while (vc.presentedViewController && !vc.presentedViewController.isBeingDismissed) {
+        vc = vc.presentedViewController;
+    }
+    return vc;
+}
+
+// -[UIApplication suspend] / -terminateWithSuccess are private; fall back to exit()
+// if a future iOS removes them instead of crashing with an unrecognized selector.
+static void suspendApp(void) {
+    UIApplication *app = [UIApplication sharedApplication];
+    if ([app respondsToSelector:@selector(suspend)])
+        ((void (*)(id, SEL))objc_msgSend)(app, @selector(suspend));
+}
+
+static void terminateApp(void) {
+    UIApplication *app = [UIApplication sharedApplication];
+    if ([app respondsToSelector:@selector(terminateWithSuccess)])
+        ((void (*)(id, SEL))objc_msgSend)(app, @selector(terminateWithSuccess));
+    exit(0);
+}
+
 void showErrorAlert(NSString *title, NSString *message, void (^completion)(void)) {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIAlertController *alert =
@@ -75,16 +132,7 @@ void showErrorAlert(NSString *title, NSString *message, void (^completion)(void)
 
         [alert addAction:okAction];
 
-        UIWindow *window = nil;
-        NSArray *windows = [[UIApplication sharedApplication] windows];
-        for (UIWindow *w in windows) {
-            if (w.isKeyWindow) {
-                window = w;
-                break;
-            }
-        }
-
-        [window.rootViewController presentViewController:alert animated:YES completion:nil];
+        [getTopViewController() presentViewController:alert animated:YES completion:nil];
     });
 }
 
@@ -95,14 +143,18 @@ NSString *getDeviceIdentifier(void) {
 }
 
 void reloadApp(UIViewController *viewController) {
-    [viewController
-        dismissViewControllerAnimated:NO
-                           completion:^{
-                               UIApplication *app = [UIApplication sharedApplication];
-                               ((void (*)(id, SEL))objc_msgSend)(app, @selector(suspend));
-                               dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC),
-                                              dispatch_get_main_queue(), ^{ exit(0); });
-                           }];
+    void (^doReload)(void) = ^{
+        suspendApp();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC),
+                       dispatch_get_main_queue(), ^{ exit(0); });
+    };
+
+    if (!viewController) {
+        doReload();
+        return;
+    }
+
+    [viewController dismissViewControllerAnimated:NO completion:doReload];
 }
 
 void loadCustomBundleFromURL(NSURL *url, UIViewController *viewController) {
@@ -134,11 +186,10 @@ void deleteAllData(UIViewController *presenter) {
 }
 
 void gracefulExit(UIViewController *presenter) {
-    UIApplication *app = [UIApplication sharedApplication];
-    [app performSelector:@selector(suspend)];
+    suspendApp();
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(),
-                   ^{ [app performSelector:@selector(terminateWithSuccess)]; });
+                   ^{ terminateApp(); });
 }
 
 void setCustomBundleURL(NSURL *url, UIViewController *presenter) {
@@ -225,9 +276,7 @@ void toggleSafeMode(void) {
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.4 * NSEC_PER_SEC), dispatch_get_main_queue(),
                    ^{
-                       UIViewController *rootVC =
-                           [UIApplication sharedApplication].windows.firstObject.rootViewController;
-                       reloadApp(rootVC);
+                       reloadApp(getKeyWindow().rootViewController);
                    });
 }
 

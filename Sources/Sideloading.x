@@ -79,6 +79,8 @@ static NSString *getAccessGroupID(void)
 static BOOL isSelfCall(void)
 {
     NSArray *address = [NSThread callStackReturnAddresses];
+    if (address.count < 3)
+        return NO;
     Dl_info  info    = {0};
     if (dladdr((void *) [address[2] longLongValue], &info) == 0)
         return NO;
