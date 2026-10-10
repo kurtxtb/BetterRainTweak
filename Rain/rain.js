@@ -31145,42 +31145,59 @@ ${ruleJson}
       CustomPageRenderer = React.memo(() => {
         var navigation2 = NavigationNative.useNavigation();
         var route = NavigationNative.useRoute();
-        var { render: PageComponent, ...args } = route.params ?? {};
+        var { render: PageComponent, ...args } = route.params;
         React.useEffect(() => void navigation2.setOptions({
           ...args
         }), []);
-        return PageComponent ? /* @__PURE__ */ jsx(PageComponent, {}) : null;
+        return /* @__PURE__ */ jsx(PageComponent, {});
       });
     }
   });
 
   // src/plugins/_core/settings/patches/tabs.tsx
-  function RainPageScreen(props) {
-    if (props && typeof props === "object") return /* @__PURE__ */ jsx(CustomPageRenderer, {
-      ...props
-    });
-    return RainPageScreen;
-  }
-  function buildRainScreen(config) {
-    var screen = {
-      route: "RAIN_CUSTOM_PAGE",
-      getComponent: RainPageScreen
+  function getRoutePage(row) {
+    var Page = routePages.get(row.key);
+    if (Page) return Page;
+    var Loaded = null;
+    Page = () => {
+      var navigation2 = NavigationNative.useNavigation();
+      var [Component, setComponent] = import_react33.default.useState(() => Loaded);
+      import_react33.default.useEffect(() => void navigation2.setOptions({
+        title: row.title()
+      }), []);
+      import_react33.default.useEffect(() => {
+        if (Component) return;
+        row.render().then((m2) => {
+          Loaded = m2.default;
+          setComponent(() => m2.default);
+        });
+      }, []);
+      return Component ? /* @__PURE__ */ jsx(Component, {}) : null;
     };
-    var native = Object.values(config).find((v2) => v2?.type === "route" && v2.screen && typeof v2.screen === "object");
-    if (!native) return screen;
-    for (var [key, value] of Object.entries(native.screen)) {
-      if (typeof value === "function" && /comp|render|screen|page|view/i.test(key)) screen[key] = RainPageScreen;
-      else if (typeof value === "string" && value === native.screen.route) screen[key] = "RAIN_CUSTOM_PAGE";
-    }
-    if (!loggedShape) {
-      loggedShape = true;
-      logger.log("[settings] native route screen keys:", Object.keys(native.screen).join(", "));
-    }
-    return screen;
+    routePages.set(row.key, Page);
+    return Page;
   }
   function patchTabsUI(unpatches7) {
     var getRows = () => Object.values(registeredSections).flatMap((sect) => sect.map((row) => ({
-      [row.key]: {
+      // Rows with a page are real "route" settings so Discord pushes them onto its
+      // own settings stack. As "pressable" rows they navigated from the root
+      // navigator, which on Discord 348+ (iOS 113691) lands in the root modal
+      // route and crashes with "Element type is invalid ... got: undefined".
+      [row.key]: row.render && !row.onPress ? {
+        type: "route",
+        icon: row.icon,
+        IconComponent: () => /* @__PURE__ */ jsx(TableRow.Icon, {
+          source: row.icon
+        }),
+        usePredicate: row.usePredicate,
+        useTrailing: row.useTrailing,
+        useTitle: row.title,
+        screen: {
+          route: row.key,
+          getComponent: () => getRoutePage(row)
+        },
+        ...row.rawTabsConfig
+      } : {
         type: "pressable",
         icon: row.icon,
         IconComponent: () => /* @__PURE__ */ jsx(TableRow.Icon, {
@@ -31204,7 +31221,10 @@ ${ruleJson}
         RAIN_CUSTOM_PAGE: {
           type: "route",
           useTitle: () => "Rain",
-          screen: buildRainScreen(rendererConfigValue)
+          screen: {
+            route: "RAIN_CUSTOM_PAGE",
+            getComponent: () => CustomPageRenderer
+          }
         },
         ...getRows()
       }),
@@ -31247,7 +31267,7 @@ ${ruleJson}
       return ret;
     }));
   }
-  var import_react33, loggedShape, settingConstants, createListModule;
+  var import_react33, routePages, settingConstants, createListModule;
   var init_tabs = __esm({
     "src/plugins/_core/settings/patches/tabs.tsx"() {
       "use strict";
@@ -31256,14 +31276,13 @@ ${ruleJson}
       init_jsxRuntime();
       init_patcher();
       init_settings();
+      init_common();
       init_components();
       init_wrappers();
-      init_logger();
       import_react33 = __toESM(require_react());
       init_settings28();
       init_shared2();
-      RainPageScreen.default = RainPageScreen;
-      loggedShape = false;
+      routePages = /* @__PURE__ */ new Map();
       settingConstants = findByPropsLazy("SETTING_RENDERER_CONFIG");
       createListModule = findByPropsLazy("createList");
     }

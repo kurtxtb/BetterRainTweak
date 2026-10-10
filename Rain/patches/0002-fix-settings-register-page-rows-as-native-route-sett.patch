@@ -1,0 +1,94 @@
+From d1309e60ebdf9dd725e7286e7f94132495ad9ba8 Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 15:24:40 +0800
+Subject: [PATCH] fix(settings): register page rows as native route settings
+
+On Discord 348 (iOS 113691) tapping any Rain settings row crashed with
+"Element type is invalid ... got: undefined". The rows were "pressable"
+and navigated to RAIN_CUSTOM_PAGE through getRootNavigationRef(); on 348
+that is handled by the root "modal" route, whose ModalScreen renders
+route.params.modal.modal, which Rain never sets.
+
+Make rows that have a page "route" settings with screen.getComponent so
+Discord's settings navigator pushes them onto its own stack, the same
+way it opens its built-in pages.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/plugins/_core/settings/patches/tabs.tsx | 49 ++++++++++++++++++++-
+ 1 file changed, 47 insertions(+), 2 deletions(-)
+
+diff --git a/src/plugins/_core/settings/patches/tabs.tsx b/src/plugins/_core/settings/patches/tabs.tsx
+index 4ebab28..0931baa 100644
+--- a/src/plugins/_core/settings/patches/tabs.tsx
++++ b/src/plugins/_core/settings/patches/tabs.tsx
+@@ -1,19 +1,64 @@
+ import { after } from "@api/patcher";
+ import { useSettings } from "@api/settings";
++import { NavigationNative } from "@metro/common";
+ import { TableRow } from "@metro/common/components";
+ import { findByPropsLazy } from "@metro/wrappers";
+ import React from "react";
+ 
+-import { registeredSections } from "..";
++import { registeredSections, type RowConfig } from "..";
+ import { CustomPageRenderer, wrapOnPress } from "./shared";
+ 
++const routePages = new Map<string, React.ComponentType>();
++
++// Settings screen for a row with a lazily imported page. Discord's settings
++// navigator needs a synchronous component from screen.getComponent().
++function getRoutePage(row: RowConfig) {
++    let Page = routePages.get(row.key);
++    if (Page) return Page;
++
++    let Loaded: React.ComponentType | null = null;
++    Page = () => {
++        const navigation = NavigationNative.useNavigation();
++        const [Component, setComponent] = React.useState<React.ComponentType | null>(() => Loaded);
++
++        React.useEffect(() => void navigation.setOptions({ title: row.title() }), []);
++        React.useEffect(() => {
++            if (Component) return;
++            row.render!().then(m => {
++                Loaded = m.default;
++                setComponent(() => m.default);
++            });
++        }, []);
++
++        return Component ? <Component /> : null;
++    };
++    routePages.set(row.key, Page);
++    return Page;
++}
++
+ const settingConstants = findByPropsLazy("SETTING_RENDERER_CONFIG");
+ const createListModule = findByPropsLazy("createList");
+ 
+ export function patchTabsUI(unpatches: (() => void | boolean)[]) {
+     const getRows = () => Object.values(registeredSections)
+         .flatMap(sect => sect.map(row => ({
+-            [row.key]: {
++            // Rows with a page are real "route" settings so Discord pushes them onto its
++            // own settings stack. As "pressable" rows they navigated from the root
++            // navigator, which on Discord 348+ (iOS 113691) lands in the root modal
++            // route and crashes with "Element type is invalid ... got: undefined".
++            [row.key]: row.render && !row.onPress ? {
++                type: "route",
++                icon: row.icon,
++                IconComponent: () => <TableRow.Icon source={row.icon} />,
++                usePredicate: row.usePredicate,
++                useTrailing: row.useTrailing,
++                useTitle: row.title,
++                screen: {
++                    route: row.key,
++                    getComponent: () => getRoutePage(row)
++                },
++                ...row.rawTabsConfig
++            } : {
+                 type: "pressable",
+                 icon: row.icon,
+                 IconComponent: () => <TableRow.Icon source={row.icon} />,
+-- 
+2.55.0.windows.5
+

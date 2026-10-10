@@ -1,6 +1,6 @@
 Package: dev.raincord.tweak
 Name: RainTweak
-Version: 1.2.4
+Version: 1.2.5
 Architecture: iphoneos-arm
 Description: A tweak to inject Rain into Discord
 Maintainer: cocobo1
