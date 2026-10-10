@@ -29511,6 +29511,215 @@ ${ruleJson}
     }
   });
 
+  // src/plugins/external.ts
+  var external_exports = {};
+  __export(external_exports, {
+    initExternalPlugins: () => initExternalPlugins,
+    installExternalPluginFromUrl: () => installExternalPluginFromUrl,
+    loadExternalPlugin: () => loadExternalPlugin,
+    uninstallExternalPlugin: () => uninstallExternalPlugin,
+    updateExternalPlugin: () => updateExternalPlugin,
+    useExternalPlugins: () => useExternalPlugins
+  });
+  function evaluatePlugin(code, url2, id) {
+    var module = {
+      exports: {}
+    };
+    var exports = module.exports;
+    try {
+      if (typeof globalThis.__RAIN_EVALUATE_JAVASCRIPT__ === "function") {
+        var tempGlobalId = `__RAIN_EXT_PLUGIN_${id.replace(/[^a-zA-Z0-9_]/g, "_")}__`;
+        var nativeCode = `
+                (function() {
+                    var module = { exports: {} };
+                    var exports = module.exports;
+                    ${code}
+                    globalThis['${tempGlobalId}'] = module.exports;
+                })();
+            `;
+        var success = globalThis.__RAIN_EVALUATE_JAVASCRIPT__(nativeCode, url2);
+        if (!success) {
+          throw new Error("Native evaluation failed");
+        }
+        var result = globalThis[tempGlobalId];
+        delete globalThis[tempGlobalId];
+        return result;
+      } else {
+        var evaluator = (0, eval)(`(function(module, exports) { ${code} 
+//# sourceURL=${url2}
+})`);
+        evaluator(module, exports);
+        return module.exports;
+      }
+    } catch (e) {
+      logger.error(`Failed to evaluate external plugin ${id}:`, e);
+      throw e;
+    }
+  }
+  function loadExternalPlugin(plugin) {
+    return _async_to_generator(function* () {
+      try {
+        var exports = evaluatePlugin(plugin.code, plugin.url, plugin.id);
+        var pluginInstance;
+        if (exports && exports.default && exports.default[/* @__PURE__ */ Symbol.for("rain.plugin")]) {
+          pluginInstance = exports.default;
+        } else if (exports && exports[/* @__PURE__ */ Symbol.for("rain.plugin")]) {
+          pluginInstance = exports;
+        } else if (exports && exports.default && typeof exports.default.start === "function") {
+          pluginInstance = exports.default;
+        } else {
+          pluginInstance = exports;
+        }
+        if (!pluginInstance) {
+          throw new Error("Invalid plugin format: missing plugin export");
+        }
+        pluginInstance.id = plugin.id;
+        pluginInstance.name = pluginInstance.name || plugin.name;
+        pluginInstance.description = pluginInstance.description || plugin.description;
+        pluginInstance.author = pluginInstance.author || plugin.author;
+        pluginInstances.set(plugin.id, pluginInstance);
+        if (isPluginEnabled(plugin.id)) {
+          yield startPlugin(plugin.id);
+        }
+      } catch (e) {
+        logger.error(`Failed to load external plugin ${plugin.id}:`, e);
+        showToast(`Failed to load external plugin ${plugin.name || plugin.id}`);
+      }
+    })();
+  }
+  function installExternalPluginFromUrl(url2) {
+    return _async_to_generator(function* () {
+      try {
+        var res = yield fetch(url2);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        var code = yield res.text();
+        var nameMatch = code.match(/@name\s+(.+)/);
+        var descMatch = code.match(/@description\s+(.+)/);
+        var authorMatch = code.match(/@author\s+(.+)/);
+        var versionMatch = code.match(/@version\s+(.+)/);
+        var urlParts = url2.split("/");
+        var fileName = urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, "");
+        var id = `ext_${Date.now()}_${fileName}`;
+        var name = nameMatch ? nameMatch[1].trim() : fileName;
+        var plugin = {
+          id,
+          url: url2,
+          code,
+          name,
+          description: descMatch ? descMatch[1].trim() : "",
+          author: authorMatch ? authorMatch[1].trim() : "",
+          version: versionMatch ? versionMatch[1].trim() : "1.0.0"
+        };
+        useExternalPlugins.getState().addPlugin(plugin);
+        usePluginSettings.getState().updatePluginSetting(id, true);
+        yield loadExternalPlugin(plugin);
+        showToast(`Installed plugin ${name}`);
+      } catch (e) {
+        logger.error(`Failed to install plugin from ${url2}:`, e);
+        showToast(`Installation failed: ${e instanceof Error ? e.message : e}`);
+      }
+    })();
+  }
+  function uninstallExternalPlugin(id) {
+    return _async_to_generator(function* () {
+      if (pluginInstances.has(id)) {
+        yield stopPlugin(id);
+        pluginInstances.delete(id);
+      }
+      useExternalPlugins.getState().removePlugin(id);
+      showToast("Plugin uninstalled");
+    })();
+  }
+  function updateExternalPlugin(id) {
+    return _async_to_generator(function* () {
+      var plugin = useExternalPlugins.getState().plugins[id];
+      if (!plugin) return;
+      try {
+        var res = yield fetch(plugin.url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        var code = yield res.text();
+        useExternalPlugins.getState().updatePluginCode(id, code);
+        var wasEnabled = isPluginEnabled(id);
+        if (wasEnabled) {
+          yield stopPlugin(id);
+          plugin.code = code;
+          yield loadExternalPlugin(plugin);
+        }
+        showToast(`Updated plugin ${plugin.name}`);
+      } catch (e) {
+        logger.error(`Failed to update plugin ${id}:`, e);
+        showToast(`Update failed: ${e instanceof Error ? e.message : e}`);
+      }
+    })();
+  }
+  function initExternalPlugins() {
+    return _async_to_generator(function* () {
+      yield waitForHydration(useExternalPlugins);
+      var plugins = Object.values(useExternalPlugins.getState().plugins);
+      for (var plugin of plugins) {
+        yield loadExternalPlugin(plugin);
+      }
+    })();
+  }
+  var useExternalPlugins;
+  var init_external = __esm({
+    "src/plugins/external.ts"() {
+      "use strict";
+      init_asyncIteratorSymbol();
+      init_promiseAllSettled();
+      init_async_to_generator();
+      init_storage();
+      init_toasts();
+      init_logger();
+      init_esm();
+      init_middleware();
+      init_plugins3();
+      useExternalPlugins = create2()(persist((set, get) => ({
+        plugins: {},
+        _hasHydrated: false,
+        addPlugin: (plugin) => {
+          set((state2) => ({
+            plugins: {
+              ...state2.plugins,
+              [plugin.id]: plugin
+            }
+          }));
+        },
+        removePlugin: (id) => {
+          set((state2) => {
+            var newPlugins = {
+              ...state2.plugins
+            };
+            delete newPlugins[id];
+            return {
+              plugins: newPlugins
+            };
+          });
+        },
+        updatePluginCode: (id, code) => {
+          set((state2) => ({
+            plugins: {
+              ...state2.plugins,
+              [id]: {
+                ...state2.plugins[id],
+                code
+              }
+            }
+          }));
+        },
+        setHasHydrated: (state2) => set({
+          _hasHydrated: state2
+        })
+      }), {
+        name: "external-plugins",
+        storage: createJSONStorage(() => createFileStorage("plugins/external.json")),
+        onRehydrateStorage: () => (state2) => {
+          state2?.setHasHydrated(true);
+        }
+      }));
+    }
+  });
+
   // src/rain/pages/Plugins/sheets/PluginInfoActionSheet.tsx
   var PluginInfoActionSheet_exports = {};
   __export(PluginInfoActionSheet_exports, {
@@ -29595,22 +29804,39 @@ ${ruleJson}
                   plugin
                 })
               }),
-              /* @__PURE__ */ jsx(import_react_native54.View, {
+              /* @__PURE__ */ jsxs(import_react_native54.View, {
                 style: {
-                  paddingBottom: 4
+                  paddingBottom: 4,
+                  flexDirection: "row",
+                  gap: 8
                 },
-                children: /* @__PURE__ */ jsx(IconButton, {
-                  size: "sm",
-                  variant: isPinned ? "destructive" : "secondary",
-                  icon: findAssetId2("PinIcon"),
-                  style: {
-                    borderRadius: 100,
-                    backgroundColor: isPinned ? semanticColors.BACKGROUND_MODIFIER_ACCENT : "transparent"
-                  },
-                  onPress: () => {
-                    togglePinnedPlugin(plugin.id);
-                  }
-                })
+                children: [
+                  plugin.id.startsWith("ext_") && /* @__PURE__ */ jsx(IconButton, {
+                    size: "sm",
+                    variant: "destructive",
+                    icon: findAssetId2("TrashIcon"),
+                    style: {
+                      borderRadius: 100
+                    },
+                    onPress: () => {
+                      Promise.resolve().then(() => (init_external(), external_exports)).then(({ uninstallExternalPlugin: uninstallExternalPlugin2 }) => {
+                        uninstallExternalPlugin2(plugin.id);
+                      });
+                    }
+                  }),
+                  /* @__PURE__ */ jsx(IconButton, {
+                    size: "sm",
+                    variant: isPinned ? "destructive" : "secondary",
+                    icon: findAssetId2("PinIcon"),
+                    style: {
+                      borderRadius: 100,
+                      backgroundColor: isPinned ? semanticColors.BACKGROUND_MODIFIER_ACCENT : "transparent"
+                    },
+                    onPress: () => {
+                      togglePinnedPlugin(plugin.id);
+                    }
+                  })
+                ]
               })
             ]
           }),
@@ -33628,7 +33854,14 @@ ${ruleJson}
       return Array.from(pluginInstances.values()).map(unifyRainPlugin);
     }, []);
     return /* @__PURE__ */ jsx(PluginPage, {
-      useItems: () => items
+      useItems: () => items,
+      installAction: {
+        label: Strings.INSTALL,
+        fetchFn: (url2) => _async_to_generator(function* () {
+          var { installExternalPluginFromUrl: installExternalPluginFromUrl2 } = yield Promise.resolve().then(() => (init_external(), external_exports));
+          yield installExternalPluginFromUrl2(url2);
+        })()
+      }
     });
   }
   var import_react37;
@@ -33637,6 +33870,7 @@ ${ruleJson}
       "use strict";
       init_asyncIteratorSymbol();
       init_promiseAllSettled();
+      init_async_to_generator();
       init_jsxRuntime();
       init_settings();
       init_i18n();
@@ -36642,14 +36876,14 @@ Type: ${asset.type}`,
     }
   });
 
-  // rain-plugins-importer:C:\Users\Cody\AppData\Local\Temp\claude\C--Users-Cody-Documents-Project-NailongTweak\8555e992-a77d-4526-962e-1b0bd646c4a8\scratchpad\rain-src\src\plugins
+  // rain-plugins-importer:C:\Users\Cody\AppData\Local\Temp\rain-scratch\src\plugins
   var plugins_exports2 = {};
   __export(plugins_exports2, {
     default: () => plugins_default2
   });
   var plugins_default2;
   var init_plugins2 = __esm({
-    "rain-plugins-importer:C:\\Users\\Cody\\AppData\\Local\\Temp\\claude\\C--Users-Cody-Documents-Project-NailongTweak\\8555e992-a77d-4526-962e-1b0bd646c4a8\\scratchpad\\rain-src\\src\\plugins"() {
+    "rain-plugins-importer:C:\\Users\\Cody\\AppData\\Local\\Temp\\rain-scratch\\src\\plugins"() {
       init_asyncIteratorSymbol();
       init_promiseAllSettled();
       plugins_default2 = {
@@ -37239,6 +37473,8 @@ Type: ${asset.type}`,
       yield ensureSetup();
       var ids = Array.from(pluginInstances.keys()).filter(isPluginEnabled);
       yield startBatched(ids, "start");
+      var { initExternalPlugins: initExternalPlugins2 } = yield Promise.resolve().then(() => (init_external(), external_exports));
+      yield initExternalPlugins2();
     })();
   }
   function initEagerPlugins() {

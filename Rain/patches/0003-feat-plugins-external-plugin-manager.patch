@@ -1,0 +1,300 @@
+From 1963587f816fd4d3dad4cae2bc9c3cf9ed4e5b24 Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sat, 10 Oct 2026 17:33:19 +0800
+Subject: [PATCH] feat(plugins): external plugin manager
+
+---
+ src/plugins/external.ts                       | 218 ++++++++++++++++++
+ src/plugins/index.ts                          |   3 +
+ src/rain/pages/Plugins/index.tsx              |   7 +
+ .../Plugins/sheets/PluginInfoActionSheet.tsx  |  17 +-
+ 4 files changed, 244 insertions(+), 1 deletion(-)
+ create mode 100644 src/plugins/external.ts
+
+diff --git a/src/plugins/external.ts b/src/plugins/external.ts
+new file mode 100644
+index 0000000..fe52924
+--- /dev/null
++++ b/src/plugins/external.ts
+@@ -0,0 +1,218 @@
++import { createFileStorage, waitForHydration } from "@api/storage";
++import { showToast } from "@api/ui/toasts";
++import { logger } from "@lib/utils/logger";
++import { create } from "zustand";
++import { createJSONStorage, persist } from "zustand/middleware";
++import { pluginInstances, startPlugin, stopPlugin, isPluginEnabled, usePluginSettings } from "./index";
++import * as t from "./types";
++
++declare global {
++    var __RAIN_EVALUATE_JAVASCRIPT__: ((code: string, url: string) => boolean) | undefined;
++}
++
++export interface ExternalPlugin {
++    id: string;
++    url: string;
++    code: string;
++    name: string;
++    description?: string;
++    author?: string;
++    version?: string;
++}
++
++interface ExternalPluginsStore {
++    plugins: Record<string, ExternalPlugin>;
++    _hasHydrated: boolean;
++    addPlugin: (plugin: ExternalPlugin) => void;
++    removePlugin: (id: string) => void;
++    updatePluginCode: (id: string, code: string) => void;
++    setHasHydrated: (state: boolean) => void;
++}
++
++export const useExternalPlugins = create<ExternalPluginsStore>()(
++    persist(
++        (set, get) => ({
++            plugins: {},
++            _hasHydrated: false,
++            addPlugin: (plugin) => {
++                set((state) => ({
++                    plugins: { ...state.plugins, [plugin.id]: plugin },
++                }));
++            },
++            removePlugin: (id) => {
++                set((state) => {
++                    const newPlugins = { ...state.plugins };
++                    delete newPlugins[id];
++                    return { plugins: newPlugins };
++                });
++            },
++            updatePluginCode: (id, code) => {
++                set((state) => ({
++                    plugins: {
++                        ...state.plugins,
++                        [id]: { ...state.plugins[id], code },
++                    },
++                }));
++            },
++            setHasHydrated: (state: boolean) => set({ _hasHydrated: state }),
++        }),
++        {
++            name: "external-plugins",
++            storage: createJSONStorage(() => createFileStorage("plugins/external.json")),
++            onRehydrateStorage: () => (state) => {
++                state?.setHasHydrated(true);
++            },
++        }
++    )
++);
++
++function evaluatePlugin(code: string, url: string, id: string): any {
++    const module = { exports: {} as any };
++    const exports = module.exports;
++
++    try {
++        if (typeof globalThis.__RAIN_EVALUATE_JAVASCRIPT__ === "function") {
++            const tempGlobalId = `__RAIN_EXT_PLUGIN_${id.replace(/[^a-zA-Z0-9_]/g, '_')}__`;
++            const nativeCode = `
++                (function() {
++                    var module = { exports: {} };
++                    var exports = module.exports;
++                    ${code}
++                    globalThis['${tempGlobalId}'] = module.exports;
++                })();
++            `;
++            const success = globalThis.__RAIN_EVALUATE_JAVASCRIPT__(nativeCode, url);
++            if (!success) {
++                throw new Error("Native evaluation failed");
++            }
++            const result = (globalThis as any)[tempGlobalId];
++            delete (globalThis as any)[tempGlobalId];
++            return result;
++        } else {
++            const evaluator = (0, eval)(`(function(module, exports) { ${code} \n//# sourceURL=${url}\n})`);
++            evaluator(module, exports);
++            return module.exports;
++        }
++    } catch (e) {
++        logger.error(`Failed to evaluate external plugin ${id}:`, e);
++        throw e;
++    }
++}
++
++export async function loadExternalPlugin(plugin: ExternalPlugin): Promise<void> {
++    try {
++        const exports = evaluatePlugin(plugin.code, plugin.url, plugin.id);
++        
++        let pluginInstance: t.rainPlugin;
++        
++        if (exports && exports.default && (exports.default as any)[Symbol.for("rain.plugin")]) {
++            pluginInstance = exports.default;
++        } else if (exports && (exports as any)[Symbol.for("rain.plugin")]) {
++            pluginInstance = exports;
++        } else if (exports && exports.default && typeof exports.default.start === "function") {
++            pluginInstance = exports.default;
++        } else {
++            pluginInstance = exports;
++        }
++
++        if (!pluginInstance) {
++            throw new Error("Invalid plugin format: missing plugin export");
++        }
++
++        pluginInstance.id = plugin.id;
++        pluginInstance.name = pluginInstance.name || plugin.name;
++        pluginInstance.description = pluginInstance.description || plugin.description;
++        pluginInstance.author = pluginInstance.author || plugin.author;
++        
++        pluginInstances.set(plugin.id, pluginInstance);
++
++        if (isPluginEnabled(plugin.id)) {
++            await startPlugin(plugin.id);
++        }
++    } catch (e) {
++        logger.error(`Failed to load external plugin ${plugin.id}:`, e);
++        showToast(`Failed to load external plugin ${plugin.name || plugin.id}`);
++    }
++}
++
++export async function installExternalPluginFromUrl(url: string): Promise<void> {
++    try {
++        const res = await fetch(url);
++        if (!res.ok) throw new Error(`HTTP ${res.status}`);
++        
++        const code = await res.text();
++        
++        const nameMatch = code.match(/@name\s+(.+)/);
++        const descMatch = code.match(/@description\s+(.+)/);
++        const authorMatch = code.match(/@author\s+(.+)/);
++        const versionMatch = code.match(/@version\s+(.+)/);
++        
++        const urlParts = url.split("/");
++        const fileName = urlParts[urlParts.length - 1].replace(/\.[^/.]+$/, "");
++        
++        const id = `ext_${Date.now()}_${fileName}`;
++        const name = nameMatch ? nameMatch[1].trim() : fileName;
++        
++        const plugin: ExternalPlugin = {
++            id,
++            url,
++            code,
++            name,
++            description: descMatch ? descMatch[1].trim() : "",
++            author: authorMatch ? authorMatch[1].trim() : "",
++            version: versionMatch ? versionMatch[1].trim() : "1.0.0",
++        };
++
++        useExternalPlugins.getState().addPlugin(plugin);
++        usePluginSettings.getState().updatePluginSetting(id, true);
++        
++        await loadExternalPlugin(plugin);
++        showToast(`Installed plugin ${name}`);
++    } catch (e) {
++        logger.error(`Failed to install plugin from ${url}:`, e);
++        showToast(`Installation failed: ${e instanceof Error ? e.message : e}`);
++    }
++}
++
++export async function uninstallExternalPlugin(id: string): Promise<void> {
++    if (pluginInstances.has(id)) {
++        await stopPlugin(id);
++        pluginInstances.delete(id);
++    }
++    useExternalPlugins.getState().removePlugin(id);
++    showToast("Plugin uninstalled");
++}
++
++export async function updateExternalPlugin(id: string): Promise<void> {
++    const plugin = useExternalPlugins.getState().plugins[id];
++    if (!plugin) return;
++    
++    try {
++        const res = await fetch(plugin.url);
++        if (!res.ok) throw new Error(`HTTP ${res.status}`);
++        
++        const code = await res.text();
++        useExternalPlugins.getState().updatePluginCode(id, code);
++        
++        const wasEnabled = isPluginEnabled(id);
++        if (wasEnabled) {
++            await stopPlugin(id);
++            plugin.code = code;
++            await loadExternalPlugin(plugin);
++        }
++        
++        showToast(`Updated plugin ${plugin.name}`);
++    } catch (e) {
++        logger.error(`Failed to update plugin ${id}:`, e);
++        showToast(`Update failed: ${e instanceof Error ? e.message : e}`);
++    }
++}
++
++export async function initExternalPlugins(): Promise<void> {
++    await waitForHydration(useExternalPlugins);
++    
++    const plugins = Object.values(useExternalPlugins.getState().plugins);
++    for (const plugin of plugins) {
++        await loadExternalPlugin(plugin);
++    }
++}
+diff --git a/src/plugins/index.ts b/src/plugins/index.ts
+index c713189..39df5ec 100644
+--- a/src/plugins/index.ts
++++ b/src/plugins/index.ts
+@@ -154,6 +154,9 @@ export async function initPlugins(): Promise<void> {
+ 
+     const ids = Array.from(pluginInstances.keys()).filter(isPluginEnabled);
+     await startBatched(ids, "start");
++
++    const { initExternalPlugins } = await import("./external");
++    await initExternalPlugins();
+ }
+ 
+ export async function initEagerPlugins(): Promise<void> {
+diff --git a/src/rain/pages/Plugins/index.tsx b/src/rain/pages/Plugins/index.tsx
+index 754ac39..925573f 100644
+--- a/src/rain/pages/Plugins/index.tsx
++++ b/src/rain/pages/Plugins/index.tsx
+@@ -96,6 +96,13 @@ export default function Plugins() {
+     return (
+         <PluginPage
+             useItems={() => items}
++            installAction={{
++                label: Strings.INSTALL,
++                fetchFn: async (url: string) => {
++                    const { installExternalPluginFromUrl } = await import("@plugins/external");
++                    await installExternalPluginFromUrl(url);
++                }
++            }}
+         />
+     );
+ }
+diff --git a/src/rain/pages/Plugins/sheets/PluginInfoActionSheet.tsx b/src/rain/pages/Plugins/sheets/PluginInfoActionSheet.tsx
+index fbce39f..76b5009 100644
+--- a/src/rain/pages/Plugins/sheets/PluginInfoActionSheet.tsx
++++ b/src/rain/pages/Plugins/sheets/PluginInfoActionSheet.tsx
+@@ -89,7 +89,22 @@ export default function PluginInfoActionSheet({
+                         <TitleComponent plugin={plugin} />
+                     </View>
+ 
+-                    <View style={{ paddingBottom: 4 }}>
++                    <View style={{ paddingBottom: 4, flexDirection: "row", gap: 8 }}>
++                        {plugin.id.startsWith("ext_") && (
++                            <IconButton
++                                size="sm"
++                                variant="destructive"
++                                icon={findAssetId("TrashIcon")}
++                                style={{
++                                    borderRadius: 100,
++                                }}
++                                onPress={() => {
++                                    import("@plugins/external").then(({ uninstallExternalPlugin }) => {
++                                        uninstallExternalPlugin(plugin.id);
++                                    });
++                                }}
++                            />
++                        )}
+                         <IconButton
+                             size="sm"
+                             variant={isPinned ? "destructive" : "secondary"}
+-- 
+2.55.0.windows.5
+

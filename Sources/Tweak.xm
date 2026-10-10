@@ -349,6 +349,23 @@ static void injectPreBundle(jsi::Runtime &runtime)
         );
         runtime.global().setProperty(runtime, "__RAIN_BRIDGE_CALL_ASYNC__", asyncCall);
 
+        auto evalJs = jsi::Function::createFromHostFunction(
+            runtime,
+            jsi::PropNameID::forUtf8(runtime, "__RAIN_EVALUATE_JAVASCRIPT__"),
+            2,
+            [](jsi::Runtime &rt, const jsi::Value &thisVal, const jsi::Value *args, size_t count) -> jsi::Value {
+                if (count < 2 || !args[0].isString() || !args[1].isString()) {
+                    throw jsi::JSError(rt, "__RAIN_EVALUATE_JAVASCRIPT__ requires (code: string, url: string)");
+                }
+                NSString *code = [JSI toNSString:args[0] runtime:rt];
+                NSString *url = [JSI toNSString:args[1] runtime:rt];
+                NSData *data = [code dataUsingEncoding:NSUTF8StringEncoding];
+                BOOL success = [JSI evaluate:data tag:url runtime:rt];
+                return jsi::Value(success);
+            }
+        );
+        runtime.global().setProperty(runtime, "__RAIN_EVALUATE_JAVASCRIPT__", evalJs);
+
     }
     catch (const jsi::JSError &e) { BunnyLog(@"injectPreBundle: JSError: %s", e.what()); }
     catch (const std::exception &e) { BunnyLog(@"injectPreBundle: exception: %s", e.what()); }
