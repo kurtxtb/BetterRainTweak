@@ -31145,16 +31145,39 @@ ${ruleJson}
       CustomPageRenderer = React.memo(() => {
         var navigation2 = NavigationNative.useNavigation();
         var route = NavigationNative.useRoute();
-        var { render: PageComponent, ...args } = route.params;
+        var { render: PageComponent, ...args } = route.params ?? {};
         React.useEffect(() => void navigation2.setOptions({
           ...args
         }), []);
-        return /* @__PURE__ */ jsx(PageComponent, {});
+        return PageComponent ? /* @__PURE__ */ jsx(PageComponent, {}) : null;
       });
     }
   });
 
   // src/plugins/_core/settings/patches/tabs.tsx
+  function RainPageScreen(props) {
+    if (props && typeof props === "object") return /* @__PURE__ */ jsx(CustomPageRenderer, {
+      ...props
+    });
+    return RainPageScreen;
+  }
+  function buildRainScreen(config) {
+    var screen = {
+      route: "RAIN_CUSTOM_PAGE",
+      getComponent: RainPageScreen
+    };
+    var native = Object.values(config).find((v2) => v2?.type === "route" && v2.screen && typeof v2.screen === "object");
+    if (!native) return screen;
+    for (var [key, value] of Object.entries(native.screen)) {
+      if (typeof value === "function" && /comp|render|screen|page|view/i.test(key)) screen[key] = RainPageScreen;
+      else if (typeof value === "string" && value === native.screen.route) screen[key] = "RAIN_CUSTOM_PAGE";
+    }
+    if (!loggedShape) {
+      loggedShape = true;
+      logger.log("[settings] native route screen keys:", Object.keys(native.screen).join(", "));
+    }
+    return screen;
+  }
   function patchTabsUI(unpatches7) {
     var getRows = () => Object.values(registeredSections).flatMap((sect) => sect.map((row) => ({
       [row.key]: {
@@ -31181,10 +31204,7 @@ ${ruleJson}
         RAIN_CUSTOM_PAGE: {
           type: "route",
           useTitle: () => "Rain",
-          screen: {
-            route: "RAIN_CUSTOM_PAGE",
-            getComponent: () => CustomPageRenderer
-          }
+          screen: buildRainScreen(rendererConfigValue)
         },
         ...getRows()
       }),
@@ -31227,7 +31247,7 @@ ${ruleJson}
       return ret;
     }));
   }
-  var import_react33, settingConstants, createListModule;
+  var import_react33, loggedShape, settingConstants, createListModule;
   var init_tabs = __esm({
     "src/plugins/_core/settings/patches/tabs.tsx"() {
       "use strict";
@@ -31238,9 +31258,12 @@ ${ruleJson}
       init_settings();
       init_components();
       init_wrappers();
+      init_logger();
       import_react33 = __toESM(require_react());
       init_settings28();
       init_shared2();
+      RainPageScreen.default = RainPageScreen;
+      loggedShape = false;
       settingConstants = findByPropsLazy("SETTING_RENDERER_CONFIG");
       createListModule = findByPropsLazy("createList");
     }
