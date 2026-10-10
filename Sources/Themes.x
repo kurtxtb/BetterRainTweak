@@ -260,6 +260,19 @@ BOOL isThemeLight(UIColor *color) {
 @end
 
 
+// From iOS 27 the keyboard keys are drawn underneath these views, so an opaque
+// theme background hides every key (only the prediction bar, globe and mic stay
+// visible). Keep matching light/dark via UIKBRenderConfig, but stop painting.
+static BOOL shouldPaintKeyboard(void) {
+	static BOOL paint;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		NSOperatingSystemVersion ios27 = {27, 0, 0};
+		paint = ![[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:ios27];
+	});
+	return paint;
+}
+
 %group KEYBOARD
 
 	id originalKeyboardColor;
@@ -271,6 +284,9 @@ BOOL isThemeLight(UIColor *color) {
 		id color = getColor(@"KEYBOARD", @"semantic") ?: getColor(@"BACKGROUND_PRIMARY", @"semantic");
 
         [%c(UIKBRenderConfig) refreshKeyboard];
+
+		if (!shouldPaintKeyboard())
+			return;
 
 		if (originalKeyboardColor != nil && originalKeyboardColor != color) {
 			originalKeyboardColor = [self backgroundColor];
@@ -288,6 +304,9 @@ BOOL isThemeLight(UIColor *color) {
 
 	- (void)didMoveToWindow {
 		%orig;
+
+		if (!shouldPaintKeyboard())
+			return;
 
 		id color = getColor(@"KEYBOARD", @"semantic") ?: getColor(@"BACKGROUND_PRIMARY", @"semantic");
 		if (originalKeyboardColor != nil && originalKeyboardColor != color) {
@@ -323,6 +342,9 @@ BOOL isThemeLight(UIColor *color) {
 	- (void)didMoveToWindow {
 		%orig;
 
+		if (!shouldPaintKeyboard())
+			return;
+
 
 		id color = getColor(@"KEYBOARD", @"semantic") ?: getColor(@"BACKGROUND_PRIMARY", @"semantic");
 		if (originalKeyboardColor != nil && originalKeyboardColor != color) {
@@ -348,6 +370,9 @@ BOOL isThemeLight(UIColor *color) {
 
 	- (void)didMoveToWindow {
 		%orig;
+
+		if (!shouldPaintKeyboard())
+			return;
 
 		id color = getColor(@"KEYBOARD", @"semantic") ?: getColor(@"BACKGROUND_PRIMARY", @"semantic");
 		if (originalKeyboardColor != nil && originalKeyboardColor != color) {
