@@ -1,4 +1,4 @@
-# RainTweak (NailongTweak)
+# RainTweak
 
 Tweak to inject Rain into Discord.
 
