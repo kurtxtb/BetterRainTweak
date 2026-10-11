@@ -20861,71 +20861,20 @@ ${pendingInsertLink}` : pendingInsertLink;
     }
   });
 
-  // src/plugins/platformindicators/storage.ts
-  var usePlatformIndicatorSettings, platformIndicatorSettings;
-  var init_storage25 = __esm({
-    "src/plugins/platformindicators/storage.ts"() {
+  // src/plugins/platformindicators/diagnostics.ts
+  var diagnostics;
+  var init_diagnostics = __esm({
+    "src/plugins/platformindicators/diagnostics.ts"() {
       "use strict";
       init_asyncIteratorSymbol();
       init_promiseAllSettled();
-      init_storage();
-      ({ useStore: usePlatformIndicatorSettings, settings: platformIndicatorSettings } = createPluginStore("platformindicators", {
-        usernames: true,
-        removeDefaultMobile: true,
-        useThemeColors: true
-      }));
-    }
-  });
-
-  // src/plugins/platformindicators/settings.tsx
-  function Settings6() {
-    var settings3 = usePlatformIndicatorSettings();
-    return /* @__PURE__ */ jsx(Stack7, {
-      style: {
-        paddingVertical: 24,
-        paddingHorizontal: 12
-      },
-      spacing: 24,
-      children: /* @__PURE__ */ jsxs(TableRowGroup7, {
-        title: "Platform Indicator",
-        children: [
-          /* @__PURE__ */ jsx(TableSwitchRow6, {
-            label: "Show icons next to usernames",
-            subLabel: "Member lists, DM list, DM header, profiles and the You tab",
-            value: settings3.usernames ?? true,
-            onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
-              usernames: v2
-            })
-          }),
-          /* @__PURE__ */ jsx(TableSwitchRow6, {
-            label: "Hide mobile status from the normal indicator",
-            value: settings3.removeDefaultMobile ?? true,
-            onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
-              removeDefaultMobile: v2
-            })
-          }),
-          /* @__PURE__ */ jsx(TableSwitchRow6, {
-            label: "Theme compatibility mode",
-            value: settings3.useThemeColors ?? true,
-            onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
-              useThemeColors: v2
-            })
-          })
-        ]
-      })
-    });
-  }
-  var TableSwitchRow6, TableRowGroup7, Stack7;
-  var init_settings22 = __esm({
-    "src/plugins/platformindicators/settings.tsx"() {
-      "use strict";
-      init_asyncIteratorSymbol();
-      init_promiseAllSettled();
-      init_jsxRuntime();
-      init_metro();
-      init_storage25();
-      ({ TableSwitchRow: TableSwitchRow6, TableRowGroup: TableRowGroup7 } = findByProps("TableSwitchRow"));
-      ({ Stack: Stack7 } = findByProps("Stack"));
+      diagnostics = {
+        usernameWithEffects: false,
+        userRows: 0,
+        status: 0,
+        avatar: false,
+        legacy: false
+      };
     }
   });
 
@@ -21002,6 +20951,22 @@ ${pendingInsertLink}` : pendingInsertLink;
     }
   });
 
+  // src/plugins/platformindicators/storage.ts
+  var usePlatformIndicatorSettings, platformIndicatorSettings;
+  var init_storage25 = __esm({
+    "src/plugins/platformindicators/storage.ts"() {
+      "use strict";
+      init_asyncIteratorSymbol();
+      init_promiseAllSettled();
+      init_storage();
+      ({ useStore: usePlatformIndicatorSettings, settings: platformIndicatorSettings } = createPluginStore("platformindicators", {
+        usernames: true,
+        removeDefaultMobile: true,
+        useThemeColors: true
+      }));
+    }
+  });
+
   // src/plugins/platformindicators/StatusIcons.tsx
   function getUserStatuses(userId) {
     if (userId === UserStore.getCurrentUser()?.id) {
@@ -21011,7 +20976,7 @@ ${pendingInsertLink}` : pendingInsertLink;
         return acc;
       }, {});
     }
-    return PresenceStore.getClientStatus?.(userId) ?? PresenceStore.getState()?.clientStatuses?.[userId];
+    return PresenceStore.getState()?.clientStatuses?.[userId] ?? PresenceStore.getClientStatus?.(userId);
   }
   function getStatusKey(userId) {
     return Object.entries(getUserStatuses(userId) ?? {}).map(([platform, status]) => `${platform}:${status}`).join(",");
@@ -21060,12 +21025,119 @@ ${pendingInsertLink}` : pendingInsertLink;
     }
   });
 
+  // src/plugins/platformindicators/settings.tsx
+  function Settings6() {
+    var settings3 = usePlatformIndicatorSettings();
+    return /* @__PURE__ */ jsxs(Stack7, {
+      style: {
+        paddingVertical: 24,
+        paddingHorizontal: 12
+      },
+      spacing: 24,
+      children: [
+        /* @__PURE__ */ jsxs(TableRowGroup7, {
+          title: "Platform Indicator",
+          children: [
+            /* @__PURE__ */ jsx(TableSwitchRow6, {
+              label: "Show icons next to usernames",
+              subLabel: "Member lists, DM list, DM header, profiles and the You tab",
+              value: settings3.usernames ?? true,
+              onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
+                usernames: v2
+              })
+            }),
+            /* @__PURE__ */ jsx(TableSwitchRow6, {
+              label: "Hide mobile status from the normal indicator",
+              value: settings3.removeDefaultMobile ?? true,
+              onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
+                removeDefaultMobile: v2
+              })
+            }),
+            /* @__PURE__ */ jsx(TableSwitchRow6, {
+              label: "Theme compatibility mode",
+              value: settings3.useThemeColors ?? true,
+              onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
+                useThemeColors: v2
+              })
+            })
+          ]
+        }),
+        /* @__PURE__ */ jsx(DiagnosticsGroup, {})
+      ]
+    });
+  }
+  function DiagnosticsGroup() {
+    var ownPlatforms = "?";
+    var presenceCount = "?";
+    try {
+      ownPlatforms = getStatusKey(UserStore.getCurrentUser()?.id) || "none";
+      presenceCount = String(Object.keys(PresenceStore.getState()?.clientStatuses ?? {}).length);
+    } catch (e) {
+      ownPlatforms = String(e);
+    }
+    var rows = [
+      [
+        "Name component",
+        diagnostics.usernameWithEffects ? "patched" : "not found"
+      ],
+      [
+        "Legacy patches",
+        diagnostics.legacy ? "on" : "off"
+      ],
+      [
+        "User rows",
+        String(diagnostics.userRows)
+      ],
+      [
+        "Status patches",
+        String(diagnostics.status)
+      ],
+      [
+        "Avatar patch",
+        diagnostics.avatar ? "patched" : "not found"
+      ],
+      [
+        "Your platforms",
+        ownPlatforms
+      ],
+      [
+        "Users with platform data",
+        presenceCount
+      ]
+    ];
+    return /* @__PURE__ */ jsx(TableRowGroup7, {
+      title: "Diagnostics",
+      children: rows.map(([label, value]) => /* @__PURE__ */ jsx(TableRow, {
+        label,
+        subLabel: value
+      }, label))
+    });
+  }
+  var TableSwitchRow6, TableRowGroup7, Stack7;
+  var init_settings22 = __esm({
+    "src/plugins/platformindicators/settings.tsx"() {
+      "use strict";
+      init_asyncIteratorSymbol();
+      init_promiseAllSettled();
+      init_jsxRuntime();
+      init_metro();
+      init_components();
+      init_stores();
+      init_diagnostics();
+      init_StatusIcons();
+      init_storage25();
+      ({ TableSwitchRow: TableSwitchRow6, TableRowGroup: TableRowGroup7 } = findByProps("TableSwitchRow"));
+      ({ Stack: Stack7 } = findByProps("Stack"));
+    }
+  });
+
   // src/plugins/platformindicators/index.tsx
   var platformindicators_exports = {};
   __export(platformindicators_exports, {
     default: () => platformindicators_default
   });
   function patchUsernameWithEffects() {
+    UsernameWithEffects = findByProps("AVERAGE_FONT_WIDTH_RATIO")?.default ?? findByFilePath("modules/display_name_styles/native/UsernameWithEffects.tsx", true);
     if (!UsernameWithEffects?.type) return false;
     unpatches6.push(after("type", UsernameWithEffects, ([props], res) => {
       if (!React2.isValidElement(res) || !props?.userId || props.pendingDisplayNameStyles) return;
@@ -21092,6 +21164,7 @@ ${pendingInsertLink}` : pendingInsertLink;
         ]
       });
     }));
+    diagnostics.usernameWithEffects = true;
     return true;
   }
   function patchUserRows() {
@@ -21118,16 +21191,30 @@ ${pendingInsertLink}` : pendingInsertLink;
         patchedAvatar = true;
       }
     };
-    findByTypeNameAll("UserRow").forEach((UserRow) => unpatches6.push(after("type", UserRow, rowPatch2)));
+    var userRows = findByTypeNameAll("UserRow").filter(Boolean);
+    userRows.forEach((UserRow) => unpatches6.push(after("type", UserRow, rowPatch2)));
+    diagnostics.userRows = userRows.length;
   }
   function patchDefaultStatus() {
-    var Status2 = findByFilePath("design/void/Status/native/Status.tsx") ?? findByName("Status", false);
-    if (Status2?.default) unpatches6.push(before("default", Status2, hideMobileStatus));
-    if (Status2?.StatusWithTyping) unpatches6.push(before("StatusWithTyping", Status2, hideMobileStatus));
-    var Avatar4 = findByFilePath("design/void/Avatar/native/Avatar.tsx", true);
-    if (Avatar4?.type) unpatches6.push(before("type", Avatar4, hideMobileStatus));
+    var patchStatus = (target, prop) => {
+      if (typeof target?.[prop] !== "function") return;
+      unpatches6.push(before(prop, target, hideMobileStatus));
+      diagnostics.status++;
+    };
+    var StatusModule = findByFilePath("design/void/Status/native/Status.tsx") ?? findByName("Status", false);
+    patchStatus(StatusModule, "default");
+    patchStatus(StatusModule, "StatusWithTyping");
+    var VoidDesign = findByProps("StatusWithTyping", "getStatusSize");
+    patchStatus(VoidDesign, "Status");
+    patchStatus(VoidDesign, "StatusWithTyping");
+    var Avatar4 = VoidDesign?.Avatar ?? findByFilePath("design/void/Avatar/native/Avatar.tsx", true);
+    if (Avatar4?.type) {
+      unpatches6.push(before("type", Avatar4, hideMobileStatus));
+      diagnostics.avatar = true;
+    }
   }
   function patchLegacyLocations() {
+    diagnostics.legacy = true;
     var DisplayName2 = findByName("DisplayName", false);
     if (DisplayName2) {
       unpatches6.push(after("default", DisplayName2, (args, res) => {
@@ -21187,6 +21274,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_common();
       init_plugins3();
       init_Developers();
+      init_diagnostics();
       init_settings22();
       init_StatusIcons();
       init_storage25();
@@ -21195,7 +21283,6 @@ ${pendingInsertLink}` : pendingInsertLink;
       hideMobileStatus = (args) => {
         if (args?.[0] && platformIndicatorSettings.removeDefaultMobile) args[0].isMobileOnline = false;
       };
-      UsernameWithEffects = findByFilePath("modules/display_name_styles/native/UsernameWithEffects.tsx", true);
       platformindicators_default = definePlugin({
         name: "PlatformIndicators",
         description: "Shows platform indicators on users",
@@ -21209,8 +21296,8 @@ ${pendingInsertLink}` : pendingInsertLink;
           return _async_to_generator(function* () {
             waitForHydration(usePlatformIndicatorSettings);
             patchDefaultStatus();
-            patchUserRows();
             if (!patchUsernameWithEffects()) patchLegacyLocations();
+            patchUserRows();
           })();
         },
         stop() {

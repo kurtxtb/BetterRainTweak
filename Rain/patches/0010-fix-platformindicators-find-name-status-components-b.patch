@@ -1,0 +1,194 @@
+From cd0d8db7fb4631e20fd19de5536216ce9577baa4 Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sun, 11 Oct 2026 17:50:47 +0800
+Subject: [PATCH] fix(platformindicators): find name/status components by
+ exports, add diagnostics
+
+Look up UsernameWithEffects by its unique AVERAGE_FONT_WIDTH_RATIO export at
+plugin start instead of relying only on the file-path tracker, patch the
+Status/Avatar copies re-exported by design/void/native, read presence from
+PresenceStore.getState() first, and show which patches applied in settings.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../platformindicators/StatusIcons.tsx        |  4 +-
+ src/plugins/platformindicators/diagnostics.ts |  8 ++++
+ src/plugins/platformindicators/index.tsx      | 39 ++++++++++++++-----
+ src/plugins/platformindicators/settings.tsx   | 32 +++++++++++++++
+ 4 files changed, 72 insertions(+), 11 deletions(-)
+ create mode 100644 src/plugins/platformindicators/diagnostics.ts
+
+diff --git a/src/plugins/platformindicators/StatusIcons.tsx b/src/plugins/platformindicators/StatusIcons.tsx
+index 416629f..8ba7116 100644
+--- a/src/plugins/platformindicators/StatusIcons.tsx
++++ b/src/plugins/platformindicators/StatusIcons.tsx
+@@ -17,11 +17,11 @@ function getUserStatuses(userId: string): Record<string, string> | undefined {
+         }, {});
+     }
+ 
+-    return PresenceStore.getClientStatus?.(userId) ?? PresenceStore.getState()?.clientStatuses?.[userId];
++    return PresenceStore.getState()?.clientStatuses?.[userId] ?? PresenceStore.getClientStatus?.(userId);
+ }
+ 
+ // Serialized as "platform:status,..." so useStateFromStores can compare snapshots by value.
+-function getStatusKey(userId: string) {
++export function getStatusKey(userId: string) {
+     return Object.entries(getUserStatuses(userId) ?? {}).map(([platform, status]) => `${platform}:${status}`).join(",");
+ }
+ 
+diff --git a/src/plugins/platformindicators/diagnostics.ts b/src/plugins/platformindicators/diagnostics.ts
+new file mode 100644
+index 0000000..67b6886
+--- /dev/null
++++ b/src/plugins/platformindicators/diagnostics.ts
+@@ -0,0 +1,8 @@
++// Which patches found their targets on this Discord build, shown on the settings page
++export const diagnostics = {
++    usernameWithEffects: false,
++    userRows: 0,
++    status: 0,
++    avatar: false,
++    legacy: false,
++};
+diff --git a/src/plugins/platformindicators/index.tsx b/src/plugins/platformindicators/index.tsx
+index eb02d6a..ade522b 100644
+--- a/src/plugins/platformindicators/index.tsx
++++ b/src/plugins/platformindicators/index.tsx
+@@ -6,6 +6,7 @@ import { React, ReactNative } from "@metro/common";
+ import { definePlugin } from "@plugins";
+ import { Contributors,Developers } from "@rain/Developers";
+ 
++import { diagnostics } from "./diagnostics";
+ import Settings from "./settings";
+ import StatusIcons from "./StatusIcons";
+ import { platformIndicatorSettings,usePlatformIndicatorSettings } from "./storage";
+@@ -22,10 +23,12 @@ const hideMobileStatus = (args: any[]) => {
+ 
+ // Discord 348+: one shared name component renders the member list, DM list, DM header,
+ // channel details header, profile and You tab names. Its component functions are anonymous
+-// under the React Compiler, so it can only be found by file path.
+-const UsernameWithEffects = findByFilePath("modules/display_name_styles/native/UsernameWithEffects.tsx", true);
++// under the React Compiler; AVERAGE_FONT_WIDTH_RATIO is only exported by its module.
++let UsernameWithEffects: any;
+ 
+ function patchUsernameWithEffects() {
++    UsernameWithEffects = findByProps("AVERAGE_FONT_WIDTH_RATIO")?.default
++        ?? findByFilePath("modules/display_name_styles/native/UsernameWithEffects.tsx", true);
+     if (!UsernameWithEffects?.type) return false;
+ 
+     unpatches.push(after("type", UsernameWithEffects, ([props]: any[], res: any) => {
+@@ -40,6 +43,7 @@ function patchUsernameWithEffects() {
+             </View>
+         );
+     }));
++    diagnostics.usernameWithEffects = true;
+     return true;
+ }
+ 
+@@ -64,21 +68,38 @@ function patchUserRows() {
+             patchedAvatar = true;
+         }
+     };
+-    findByTypeNameAll("UserRow").forEach(UserRow => unpatches.push(after("type", UserRow, rowPatch)));
++    const userRows = findByTypeNameAll("UserRow").filter(Boolean);
++    userRows.forEach(UserRow => unpatches.push(after("type", UserRow, rowPatch)));
++    diagnostics.userRows = userRows.length;
+ }
+ 
+ function patchDefaultStatus() {
+-    const Status = findByFilePath("design/void/Status/native/Status.tsx") ?? findByName("Status", false);
+-    if (Status?.default) unpatches.push(before("default", Status, hideMobileStatus));
+-    if (Status?.StatusWithTyping) unpatches.push(before("StatusWithTyping", Status, hideMobileStatus));
++    const patchStatus = (target: any, prop: string) => {
++        if (typeof target?.[prop] !== "function") return;
++        unpatches.push(before(prop, target, hideMobileStatus));
++        diagnostics.status++;
++    };
++
++    const StatusModule = findByFilePath("design/void/Status/native/Status.tsx") ?? findByName("Status", false);
++    patchStatus(StatusModule, "default");
++    patchStatus(StatusModule, "StatusWithTyping");
++
++    // design/void/native re-exports these by copying the values, so its copies need patching too
++    const VoidDesign = findByProps("StatusWithTyping", "getStatusSize");
++    patchStatus(VoidDesign, "Status");
++    patchStatus(VoidDesign, "StatusWithTyping");
+ 
+     // Avatar also reads isMobileOnline to cut the phone-shaped hole for the status
+-    const Avatar = findByFilePath("design/void/Avatar/native/Avatar.tsx", true);
+-    if (Avatar?.type) unpatches.push(before("type", Avatar, hideMobileStatus));
++    const Avatar = VoidDesign?.Avatar ?? findByFilePath("design/void/Avatar/native/Avatar.tsx", true);
++    if (Avatar?.type) {
++        unpatches.push(before("type", Avatar, hideMobileStatus));
++        diagnostics.avatar = true;
++    }
+ }
+ 
+ // Older Discord builds where these components still had names
+ function patchLegacyLocations() {
++    diagnostics.legacy = true;
+     const DisplayName = findByName("DisplayName", false);
+     if (DisplayName) {
+         unpatches.push(after("default", DisplayName, (args, res) => {
+@@ -131,8 +152,8 @@ export default definePlugin({
+         waitForHydration(usePlatformIndicatorSettings);
+ 
+         patchDefaultStatus();
+-        patchUserRows();
+         if (!patchUsernameWithEffects()) patchLegacyLocations();
++        patchUserRows();
+     },
+     stop() {
+         for (const unpatch of unpatches) unpatch();
+diff --git a/src/plugins/platformindicators/settings.tsx b/src/plugins/platformindicators/settings.tsx
+index ec4f74c..6e6112e 100644
+--- a/src/plugins/platformindicators/settings.tsx
++++ b/src/plugins/platformindicators/settings.tsx
+@@ -1,5 +1,9 @@
+ import { findByProps } from "@metro";
++import { TableRow } from "@metro/common/components";
++import { PresenceStore, UserStore } from "@metro/common/stores";
+ 
++import { diagnostics } from "./diagnostics";
++import { getStatusKey } from "./StatusIcons";
+ import { usePlatformIndicatorSettings } from "./storage";
+ 
+ const { TableSwitchRow, TableRowGroup } = findByProps("TableSwitchRow");
+@@ -31,6 +35,34 @@ export default function Settings() {
+                     onValueChange={(v: boolean) => usePlatformIndicatorSettings.getState().updateSettings({ useThemeColors: v })}
+                 />
+             </TableRowGroup>
++            <DiagnosticsGroup />
+         </Stack>
+     );
+ }
++
++function DiagnosticsGroup() {
++    let ownPlatforms = "?";
++    let presenceCount = "?";
++    try {
++        ownPlatforms = getStatusKey(UserStore.getCurrentUser()?.id) || "none";
++        presenceCount = String(Object.keys(PresenceStore.getState()?.clientStatuses ?? {}).length);
++    } catch (e) {
++        ownPlatforms = String(e);
++    }
++
++    const rows: [string, string][] = [
++        ["Name component", diagnostics.usernameWithEffects ? "patched" : "not found"],
++        ["Legacy patches", diagnostics.legacy ? "on" : "off"],
++        ["User rows", String(diagnostics.userRows)],
++        ["Status patches", String(diagnostics.status)],
++        ["Avatar patch", diagnostics.avatar ? "patched" : "not found"],
++        ["Your platforms", ownPlatforms],
++        ["Users with platform data", presenceCount],
++    ];
++
++    return (
++        <TableRowGroup title="Diagnostics">
++            {rows.map(([label, value]) => <TableRow key={label} label={label} subLabel={value} />)}
++        </TableRowGroup>
++    );
++}
+-- 
+2.55.0.windows.5
+
