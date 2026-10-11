@@ -1,0 +1,76 @@
+From c177caae61a0ce92974f6016a08aa90a4f25ab3e Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sun, 11 Oct 2026 15:47:05 +0800
+Subject: [PATCH] fix(badges): find useBadges by file path on newer Discord
+
+Discord 348+ builds useBadges with React Compiler, so the hook is anonymous and byName("useBadges") no longer matches, crashing core.badges on startup. Look it up by its file path first and fall back to the old name lookup.
+---
+ src/plugins/_core/badges/index.ts | 7 ++++---
+ src/plugins/globalbadges/index.ts | 7 ++++---
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/src/plugins/_core/badges/index.ts b/src/plugins/_core/badges/index.ts
+index 2b38a88..d3ae120 100644
+--- a/src/plugins/_core/badges/index.ts
++++ b/src/plugins/_core/badges/index.ts
+@@ -1,6 +1,6 @@
+ import { after } from "@api/patcher";
+ import { onJsxCreate } from "@api/react/jsx";
+-import { findByNameLazy } from "@metro";
++import { findByFilePath, findByName } from "@metro";
+ import { FluxDispatcher } from "@metro/common";
+ import { definePlugin } from "@plugins";
+ import { Developers } from "@rain/Developers";
+@@ -34,7 +34,8 @@ interface RolesData {
+     [roleName: string]: RoleData;
+ }
+ 
+-const useBadgesModule = findByNameLazy("useBadges", false);
++// Discord 348+ builds useBadges with React Compiler, leaving the hook anonymous, so look it up by file path first
++const findUseBadgesModule = () => findByFilePath("modules/user_profile/hooks/useBadges.tsx") ?? findByName("useBadges", false);
+ 
+ const badgesCache = new Map<string, Badge[]>();
+ const badgeProps = new Map<string, Record<string, any>>();
+@@ -120,7 +121,7 @@ export default definePlugin({
+             }
+         };
+ 
+-        after("default", useBadgesModule, ([user], result) => {
++        after("default", findUseBadgesModule(), ([user], result) => {
+             if (!user) return;
+ 
+             const userId = user.userId;
+diff --git a/src/plugins/globalbadges/index.ts b/src/plugins/globalbadges/index.ts
+index 6ed69c8..1615655 100644
+--- a/src/plugins/globalbadges/index.ts
++++ b/src/plugins/globalbadges/index.ts
+@@ -1,6 +1,6 @@
+ import { after } from "@api/patcher";
+ import { onJsxCreate } from "@api/react/jsx";
+-import { findByNameLazy } from "@metro";
++import { findByFilePath, findByName } from "@metro";
+ import { definePlugin } from "@plugins";
+ import { Contributors, Developers } from "@rain/Developers";
+ 
+@@ -9,7 +9,8 @@ import { customBadgesSettings } from "./storage";
+ import { BadgeProps } from "./types";
+ import { GlobalBadges, loadBadges } from "./utils";
+ 
+-const useBadgesModule = findByNameLazy("useBadges", false);
++// Discord 348+ builds useBadges with React Compiler, leaving the hook anonymous, so look it up by file path first
++const findUseBadgesModule = () => findByFilePath("modules/user_profile/hooks/useBadges.tsx") ?? findByName("useBadges", false);
+ const REFRESH_INTERVAL = 1000 * 60 * 30;
+ 
+ let patches: Array<() => void> = [];
+@@ -48,7 +49,7 @@ export default definePlugin({
+         });
+ 
+         patches.push(
+-            after("default", useBadgesModule, ([user], result) => {
++            after("default", findUseBadgesModule(), ([user], result) => {
+                 if (!user) return;
+                 const { userId } = user;
+                 const badges = GlobalBadges[userId];
+-- 
+2.55.0.windows.5
+

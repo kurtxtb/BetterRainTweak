@@ -14698,7 +14698,7 @@ ${pendingInsertLink}` : pendingInsertLink;
   __export(globalbadges_exports, {
     default: () => globalbadges_default
   });
-  var useBadgesModule, REFRESH_INTERVAL, patches16, intervalId, globalbadges_default;
+  var findUseBadgesModule, REFRESH_INTERVAL, patches16, intervalId, globalbadges_default;
   var init_globalbadges = __esm({
     "src/plugins/globalbadges/index.ts"() {
       "use strict";
@@ -14713,7 +14713,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_settings15();
       init_storage17();
       init_utils5();
-      useBadgesModule = findByNameLazy("useBadges", false);
+      findUseBadgesModule = () => findByFilePath("modules/user_profile/hooks/useBadges.tsx") ?? findByName("useBadges", false);
       REFRESH_INTERVAL = 1e3 * 60 * 30;
       patches16 = [];
       globalbadges_default = definePlugin({
@@ -14749,7 +14749,7 @@ ${pendingInsertLink}` : pendingInsertLink;
                 }
               }
             });
-            patches16.push(after("default", useBadgesModule, ([user], result) => {
+            patches16.push(after("default", findUseBadgesModule(), ([user], result) => {
               if (!user) return;
               var { userId } = user;
               var badges = GlobalBadges[userId];
@@ -28329,7 +28329,7 @@ ${ruleJson}
   __export(badges_exports, {
     default: () => badges_default
   });
-  var useBadgesModule2, badgesCache, badgeProps, pendingRequests, badges_default;
+  var findUseBadgesModule2, badgesCache, badgeProps, pendingRequests, badges_default;
   var init_badges = __esm({
     "src/plugins/_core/badges/index.ts"() {
       "use strict";
@@ -28343,7 +28343,7 @@ ${ruleJson}
       init_plugins3();
       init_Developers();
       init_i18n();
-      useBadgesModule2 = findByNameLazy("useBadges", false);
+      findUseBadgesModule2 = () => findByFilePath("modules/user_profile/hooks/useBadges.tsx") ?? findByName("useBadges", false);
       badgesCache = /* @__PURE__ */ new Map();
       badgeProps = /* @__PURE__ */ new Map();
       pendingRequests = /* @__PURE__ */ new Set();
@@ -28425,7 +28425,7 @@ ${ruleJson}
               pendingRequests.delete(userId);
             }
           })();
-          after("default", useBadgesModule2, ([user], result) => {
+          after("default", findUseBadgesModule2(), ([user], result) => {
             if (!user) return;
             var userId = user.userId;
             var cached = badgesCache.get(userId);
