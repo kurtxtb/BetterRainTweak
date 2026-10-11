@@ -8,7 +8,7 @@ bundle, and adds a few plugins. See [Changes from upstream](#changes-from-upstre
 
 ## Installation
 
-The latest builds can be found in the [Releases](https://github.com/kurtxtb/NailongTweak/releases) tab.
+The latest builds can be found in the [Releases](https://github.com/kurtxtb/RainTweak/releases) tab.
 **iOS 27 is NOT officially supported by upstream Rain; this fork fixes the issues listed below, but you may still encounter bugs**
 
 <details>
