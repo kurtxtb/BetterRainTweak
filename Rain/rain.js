@@ -16115,7 +16115,7 @@ ${pendingInsertLink}` : pendingInsertLink;
           var storage = useMessageLoggerSettings.getState();
           if (!storage.deleted?.enabled) return args;
           if (!UserStore || !MessageStore) return args;
-          var currentUserId2 = UserStore.getCurrentUser?.()?.id;
+          var currentUserId = UserStore.getCurrentUser?.()?.id;
           var { id, channelId } = event;
           var message = MessageStore.getMessage?.(channelId, id);
           if (!message) return args;
@@ -20870,9 +20870,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_promiseAllSettled();
       init_storage();
       ({ useStore: usePlatformIndicatorSettings, settings: platformIndicatorSettings } = createPluginStore("platformindicators", {
-        dmTopBar: true,
-        userList: true,
-        profileUsername: true,
+        usernames: true,
         removeDefaultMobile: true,
         useThemeColors: true
       }));
@@ -20892,24 +20890,11 @@ ${pendingInsertLink}` : pendingInsertLink;
         title: "Platform Indicator",
         children: [
           /* @__PURE__ */ jsx(TableSwitchRow6, {
-            label: "Show icons on the dm top bar",
-            value: settings3.dmTopBar ?? true,
+            label: "Show icons next to usernames",
+            subLabel: "Member lists, DM list, DM header, profiles and the You tab",
+            value: settings3.usernames ?? true,
             onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
-              dmTopBar: v2
-            })
-          }),
-          /* @__PURE__ */ jsx(TableSwitchRow6, {
-            label: "Show icons on the users and DMs list",
-            value: settings3.userList ?? true,
-            onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
-              userList: v2
-            })
-          }),
-          /* @__PURE__ */ jsx(TableSwitchRow6, {
-            label: "Show icons on user profiles",
-            value: settings3.profileUsername ?? true,
-            onValueChange: (v2) => usePlatformIndicatorSettings.getState().updateSettings({
-              profileUsername: v2
+              usernames: v2
             })
           }),
           /* @__PURE__ */ jsx(TableSwitchRow6, {
@@ -21018,60 +21003,60 @@ ${pendingInsertLink}` : pendingInsertLink;
   });
 
   // src/plugins/platformindicators/StatusIcons.tsx
-  function queryPresenceStoreWithCache() {
-    if (!statusCacheTimeout) {
-      statusCacheTimeout = setTimeout(() => {
-        statusCacheHits = 0;
-        statusCacheTimeout = null;
-      }, 5e3);
-    }
-    if (!statusCache || statusCacheHits === 0) {
-      statusCache = PresenceStore.getState();
-    }
-    statusCacheHits = (statusCacheHits + 1) % 20;
-    return statusCache;
-  }
   function getUserStatuses(userId) {
-    var statuses;
-    if (!currentUserId) {
-      currentUserId = UserStore.getCurrentUser()?.id;
-    }
-    if (userId === currentUserId) {
+    if (userId === UserStore.getCurrentUser()?.id) {
       var sessions = SessionsStore.getSessions();
-      statuses = Object.values(sessions).reduce((acc, curr) => {
+      return Object.values(sessions ?? {}).reduce((acc, curr) => {
         if (curr.clientInfo.client !== "unknown") acc[curr.clientInfo.client] = curr.status;
         return acc;
       }, {});
-    } else {
-      statuses = queryPresenceStoreWithCache()?.clientStatuses[userId];
     }
-    return statuses;
+    return PresenceStore.getClientStatus?.(userId) ?? PresenceStore.getState()?.clientStatuses?.[userId];
+  }
+  function getStatusKey(userId) {
+    return Object.entries(getUserStatuses(userId) ?? {}).map(([platform, status]) => `${platform}:${status}`).join(",");
   }
   function StatusIcons(props) {
     var settings3 = usePlatformIndicatorSettings();
-    var userId = props.userId;
+    var { userId } = props;
     var iconSize = props.size ?? 16;
-    var statuses = getUserStatuses(userId);
-    return /* @__PURE__ */ jsx(Fragment, {
-      children: Object.entries(statuses ?? {}).map(([platform, status]) => /* @__PURE__ */ jsx(StatusIcon, {
-        platform,
-        color: getStatusColor(status, settings3.useThemeColors),
-        iconSize
-      }))
+    var statusKey = FluxUtils?.useStateFromStores ? FluxUtils.useStateFromStores([
+      PresenceStore,
+      SessionsStore
+    ], () => getStatusKey(userId), [
+      userId
+    ]) : getStatusKey(userId);
+    if (!statusKey) return null;
+    return /* @__PURE__ */ jsx(View28, {
+      style: {
+        flexDirection: "row",
+        alignItems: "center",
+        flexShrink: 0,
+        marginLeft: 4
+      },
+      children: statusKey.split(",").map((entry) => {
+        var [platform, status] = entry.split(":");
+        return /* @__PURE__ */ jsx(StatusIcon, {
+          platform,
+          color: getStatusColor(status, settings3.useThemeColors),
+          iconSize
+        }, platform);
+      })
     });
   }
-  var statusCache, statusCacheHits, statusCacheTimeout, currentUserId;
+  var View28;
   var init_StatusIcons = __esm({
     "src/plugins/platformindicators/StatusIcons.tsx"() {
       "use strict";
       init_asyncIteratorSymbol();
       init_promiseAllSettled();
       init_jsxRuntime();
+      init_common();
       init_stores();
       init_colors2();
       init_StatusIcon();
       init_storage25();
-      statusCacheHits = 0;
+      ({ View: View28 } = ReactNative);
     }
   });
 
@@ -21080,7 +21065,114 @@ ${pendingInsertLink}` : pendingInsertLink;
   __export(platformindicators_exports, {
     default: () => platformindicators_default
   });
-  var View28, Text7, unpatches6, platformindicators_default;
+  function patchUsernameWithEffects() {
+    if (!UsernameWithEffects?.type) return false;
+    unpatches6.push(after("type", UsernameWithEffects, ([props], res) => {
+      if (!React2.isValidElement(res) || !props?.userId || props.pendingDisplayNameStyles) return;
+      if (!platformIndicatorSettings.usernames) return;
+      return /* @__PURE__ */ jsxs(View29, {
+        style: {
+          flexDirection: "row",
+          alignItems: "center",
+          flexShrink: 1,
+          minWidth: 0
+        },
+        children: [
+          React2.cloneElement(res, {
+            style: [
+              res.props?.style,
+              {
+                flexShrink: 1
+              }
+            ]
+          }),
+          /* @__PURE__ */ jsx(StatusIcons, {
+            userId: props.userId
+          })
+        ]
+      });
+    }));
+    return true;
+  }
+  function patchUserRows() {
+    var patchedAvatar = false;
+    var rowPatch2 = (args, res) => {
+      var user = args[0]?.user;
+      if (!user?.id || !res?.props?.label || !platformIndicatorSettings.usernames) return;
+      if (UsernameWithEffects && findInReactTree(res.props.label, (c2) => c2?.type === UsernameWithEffects)) return;
+      if (findInReactTree(res.props.label, (c2) => c2?.key === "TabsV2MemberListStatusIconsView")) return;
+      res.props.label = /* @__PURE__ */ jsxs(View29, {
+        style: {
+          flexDirection: "row",
+          alignItems: "center"
+        },
+        children: [
+          res.props.label,
+          /* @__PURE__ */ jsx(StatusIcons, {
+            userId: user.id
+          }, "TabsV2MemberListStatusIconsView")
+        ]
+      });
+      if (!patchedAvatar && res.props.icon?.type) {
+        unpatches6.push(before("type", res.props.icon.type, hideMobileStatus));
+        patchedAvatar = true;
+      }
+    };
+    findByTypeNameAll("UserRow").forEach((UserRow) => unpatches6.push(after("type", UserRow, rowPatch2)));
+  }
+  function patchDefaultStatus() {
+    var Status2 = findByFilePath("design/void/Status/native/Status.tsx") ?? findByName("Status", false);
+    if (Status2?.default) unpatches6.push(before("default", Status2, hideMobileStatus));
+    if (Status2?.StatusWithTyping) unpatches6.push(before("StatusWithTyping", Status2, hideMobileStatus));
+    var Avatar4 = findByFilePath("design/void/Avatar/native/Avatar.tsx", true);
+    if (Avatar4?.type) unpatches6.push(before("type", Avatar4, hideMobileStatus));
+  }
+  function patchLegacyLocations() {
+    var DisplayName2 = findByName("DisplayName", false);
+    if (DisplayName2) {
+      unpatches6.push(after("default", DisplayName2, (args, res) => {
+        var user = args[0]?.user;
+        if (!user?.id || !res || !platformIndicatorSettings.usernames) return;
+        var row = findInReactTree(res, (c2) => c2?.props?.style?.flexDirection === "row");
+        if (!row?.props) return;
+        if (!Array.isArray(row.props.children)) row.props.children = [
+          row.props.children
+        ];
+        if (row.props.children.some((c2) => c2?.key === "DisplayNamePlatformIndicators")) return;
+        row.props.children.push(/* @__PURE__ */ jsx(StatusIcons, {
+          userId: user.id
+        }, "DisplayNamePlatformIndicators"));
+      }));
+    }
+    var Rows = findByProps("GuildMemberRow");
+    if (Rows?.GuildMemberRow) {
+      unpatches6.push(after("type", Rows.GuildMemberRow, (args, res) => {
+        var user = args[0]?.user;
+        if (!user?.id || !platformIndicatorSettings.usernames) return;
+        if (findInReactTree(res, (c2) => c2?.key === "GuildMemberRowStatusIconsView")) return;
+        var row = findInReactTree(res, (c2) => c2?.props?.style?.flexDirection === "row");
+        if (Array.isArray(row?.props?.children)) {
+          row.props.children.splice(2, 0, /* @__PURE__ */ jsx(StatusIcons, {
+            userId: user.id
+          }, "GuildMemberRowStatusIconsView"));
+        }
+      }));
+    }
+    var MessagesItemChannelContent = findByTypeName("MessagesItemChannelContent");
+    if (MessagesItemChannelContent) {
+      unpatches6.push(after("type", MessagesItemChannelContent, (args, res) => {
+        var channel = args[0]?.channel;
+        if (channel?.recipients?.length !== 1 || !platformIndicatorSettings.usernames) return;
+        var textContainer = findInReactTree(res, (m2) => m2.props?.children?.[0]?.props?.variant === "redesign/channel-title/semibold");
+        if (!Array.isArray(textContainer?.props?.children)) return;
+        if (textContainer.props.children.some((c2) => c2?.key === "TabsV2RedesignDMListIcons")) return;
+        textContainer.props.children.push(/* @__PURE__ */ jsx(StatusIcons, {
+          userId: channel.recipients[0]
+        }, "TabsV2RedesignDMListIcons"));
+      }));
+    }
+  }
+  var View29, unpatches6, hideMobileStatus, UsernameWithEffects, platformindicators_default;
   var init_platformindicators = __esm({
     "src/plugins/platformindicators/index.tsx"() {
       "use strict";
@@ -21098,8 +21190,12 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_settings22();
       init_StatusIcons();
       init_storage25();
-      ({ View: View28, Text: Text7 } = ReactNative);
+      ({ View: View29 } = ReactNative);
       unpatches6 = [];
+      hideMobileStatus = (args) => {
+        if (args?.[0] && platformIndicatorSettings.removeDefaultMobile) args[0].isMobileOnline = false;
+      };
+      UsernameWithEffects = findByFilePath("modules/display_name_styles/native/UsernameWithEffects.tsx", true);
       platformindicators_default = definePlugin({
         name: "PlatformIndicators",
         description: "Shows platform indicators on users",
@@ -21108,127 +21204,13 @@ ${pendingInsertLink}` : pendingInsertLink;
           Developers.kmmiio99o
         ],
         id: "platformindicators",
-        version: "1.0.0",
+        version: "1.1.0",
         start() {
           return _async_to_generator(function* () {
             waitForHydration(usePlatformIndicatorSettings);
-            var debugLabels = false;
-            var DisplayName2 = findByName("DisplayName", false);
-            if (DisplayName2) {
-              unpatches6.push(after("default", DisplayName2, (args, res) => {
-                var user = args[0]?.user;
-                if (!user || !user.id || !res) return;
-                var row = findInReactTree(res, (c2) => c2?.props?.style?.flexDirection === "row");
-                if (row?.props?.children && Array.isArray(row.props.children)) {
-                  row.props.children.push(/* @__PURE__ */ jsx(View28, {
-                    style: {
-                      marginLeft: 4,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      flexShrink: 0
-                    },
-                    children: /* @__PURE__ */ jsx(StatusIcons, {
-                      userId: user.id
-                    })
-                  }, "DisplayNamePlatformIndicators"));
-                }
-              }));
-            }
-            var Status2 = findByName("Status", false);
-            unpatches6.push(before("default", Status2, (args) => {
-              if (!args) return;
-              if (!args[0]) return;
-              if (!platformIndicatorSettings.removeDefaultMobile) return;
-              args[0].isMobileOnline = false;
-            }));
-            var Rows = findByProps("GuildMemberRow");
-            if (Rows?.GuildMemberRow) {
-              unpatches6.push(after("type", Rows.GuildMemberRow, (args, res) => {
-                var user = args[0]?.user;
-                if (!platformIndicatorSettings.userList) return;
-                var statusIconsView = findInReactTree(res, (c2) => c2.key === "GuildMemberRowStatusIconsView");
-                if (!statusIconsView) {
-                  var row = findInReactTree(res, (c2) => c2.props?.style?.flexDirection === "row");
-                  if (row) {
-                    row.props.children.splice(2, 0, /* @__PURE__ */ jsx(View28, {
-                      style: {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        flexShrink: 0,
-                        marginLeft: 4
-                      },
-                      children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
-                        children: "GMRSIV"
-                      }) : /* @__PURE__ */ jsx(StatusIcons, {
-                        userId: user.id
-                      })
-                    }, "GuildMemberRowStatusIconsView"));
-                  }
-                }
-              }));
-            }
-            var patchedAvatar = false;
-            var rowPatch2 = (args, res) => {
-              var user = args[0]?.user;
-              if (!platformIndicatorSettings.userList) return;
-              var modifiedStatusIcons = findInReactTree(res?.props?.label, (c2) => c2.key === "TabsV2MemberListStatusIconsView");
-              if (!modifiedStatusIcons) {
-                res.props.label = /* @__PURE__ */ jsxs(View28, {
-                  style: {
-                    flexDirection: "row",
-                    alignItems: "center"
-                  },
-                  children: [
-                    res.props.label,
-                    /* @__PURE__ */ jsx(View28, {
-                      style: {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        flexShrink: 0,
-                        marginLeft: 4
-                      },
-                      children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
-                        children: "TV2MLSIV"
-                      }) : /* @__PURE__ */ jsx(StatusIcons, {
-                        userId: user.id
-                      })
-                    }, "TabsV2MemberListStatusIconsView")
-                  ]
-                }, "TabsV2MemberListStatusIconsView");
-                if (!patchedAvatar && res.props.icon?.type) {
-                  unpatches6.push(before("type", res.props.icon.type, (args2) => {
-                    if (platformIndicatorSettings.removeDefaultMobile) {
-                      args2[0].isMobileOnline = false;
-                    }
-                  }));
-                  patchedAvatar = true;
-                }
-              }
-            };
-            findByTypeNameAll("UserRow").forEach((UserRow) => unpatches6.push(after("type", UserRow, rowPatch2)));
-            var MessagesItemChannelContent = findByTypeName("MessagesItemChannelContent");
-            unpatches6.push(after("type", MessagesItemChannelContent, (args, res) => {
-              var channel = args[0]?.channel;
-              if (channel?.recipients?.length === 1) {
-                var userId = channel.recipients[0];
-                var textContainer = findInReactTree(res, (m2) => m2.props?.children?.[0]?.props?.variant === "redesign/channel-title/semibold");
-                if (textContainer) {
-                  textContainer.props.children.push(/* @__PURE__ */ jsx(View28, {
-                    style: {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      flexShrink: 0,
-                      marginLeft: 4
-                    },
-                    children: debugLabels ? /* @__PURE__ */ jsx(Text7, {
-                      children: "TV2RDMLI"
-                    }) : /* @__PURE__ */ jsx(StatusIcons, {
-                      userId
-                    })
-                  }, "TabsV2RedesignDMListIcons"));
-                }
-              }
-            }));
+            patchDefaultStatus();
+            patchUserRows();
+            if (!patchUsernameWithEffects()) patchLegacyLocations();
           })();
         },
         stop() {
@@ -22550,8 +22532,8 @@ render().catch(error => {
       });
       ({ useThemeContext } = findByProps("useThemeContext"));
       canModifyReview = (review, profileOwnerId) => {
-        var currentUserId2 = getCurrentUser4()?.id;
-        return review.sender.discordID === currentUserId2 || profileOwnerId === currentUserId2 || admins.includes(currentUserId2);
+        var currentUserId = getCurrentUser4()?.id;
+        return review.sender.discordID === currentUserId || profileOwnerId === currentUserId || admins.includes(currentUserId);
       };
       semanticColorAlternatives = {
         TEXT_NORMAL: "TEXT_DEFAULT"
@@ -24576,7 +24558,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
     var { useSafeAreaInsets: useSafeAreaInsets3 } = findByProps("useSafeAreaInsets");
     var { useNavigatorBackPressHandler } = findByProps("useNavigatorBackPressHandler");
     var { Gesture, GestureDetector } = findByProps("Gesture", "GestureDetector");
-    var { Image: Image19, Pressable: Pressable9, ScrollView: ScrollView48, Text: Text9, View: View55, TextInput: TextInput6 } = Native;
+    var { Image: Image19, Pressable: Pressable9, ScrollView: ScrollView48, Text: Text8, View: View56, TextInput: TextInput6 } = Native;
     function DragTarget(properties) {
       var callbacks2 = (0, import_react25.useRef)(properties);
       callbacks2.current = properties;
@@ -24594,7 +24576,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       }).onFinalize(() => callbacks2.current.onCancel()), []);
       return /* @__PURE__ */ jsx(GestureDetector, {
         gesture,
-        children: /* @__PURE__ */ jsx(View55, {
+        children: /* @__PURE__ */ jsx(View56, {
           collapsable: false,
           style: properties.offset ? {
             transform: [
@@ -24617,7 +24599,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var radius = !item.kind ? size / 2 : size >= 44 ? 16 : folder ? 9 : Math.max(5, Math.round(size * 0.28));
       var fill = item.kind === "guild" ? rawColors.BRAND_500 : background;
       if (folder) fill = item.color === void 0 ? folderBackground : `#${item.color.toString(16).padStart(6, "0")}`;
-      return /* @__PURE__ */ jsxs(View55, {
+      return /* @__PURE__ */ jsxs(View56, {
         style: {
           ...CENTER,
           position: "relative",
@@ -24627,7 +24609,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
           backgroundColor: uri ? void 0 : fill
         },
         children: [
-          folder ? item.children.slice(0, 4).map((guild, index) => /* @__PURE__ */ jsx(View55, {
+          folder ? item.children.slice(0, 4).map((guild, index) => /* @__PURE__ */ jsx(View56, {
             style: {
               [index % 2 ? "right" : "left"]: 6,
               [index < 2 ? "top" : "bottom"]: 6,
@@ -24648,7 +24630,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               height: size,
               width: size
             }
-          }) : /* @__PURE__ */ jsx(Text9, {
+          }) : /* @__PURE__ */ jsx(Text8, {
             numberOfLines: 1,
             style: {
               color: item.kind ? rawColors.WHITE : foreground,
@@ -24657,7 +24639,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
             },
             children: initials(item.name)
           }),
-          selected ? /* @__PURE__ */ jsx(View55, {
+          selected ? /* @__PURE__ */ jsx(View56, {
             pointerEvents: "none",
             style: [
               styles5.compactSelection,
@@ -24666,7 +24648,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               }
             ]
           }) : null,
-          badged && (item.mentionCount ? /* @__PURE__ */ jsx(View55, {
+          badged && (item.mentionCount ? /* @__PURE__ */ jsx(View56, {
             style: [
               styles5.mentionBadge,
               {
@@ -24676,7 +24658,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                 right: compact ? -4 : -5
               }
             ],
-            children: /* @__PURE__ */ jsx(Text9, {
+            children: /* @__PURE__ */ jsx(Text8, {
               style: {
                 color: rawColors.WHITE,
                 fontSize: compact ? 9 : 10,
@@ -24684,7 +24666,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               },
               children: item.mentionCount > 99 ? "99+" : item.mentionCount
             })
-          }) : item.unread ? /* @__PURE__ */ jsx(View55, {
+          }) : item.unread ? /* @__PURE__ */ jsx(View56, {
             style: [
               styles5.unreadBadge,
               {
@@ -24734,7 +24716,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var highlighted = selected || merging;
       var content = /* @__PURE__ */ jsxs(Fragment, {
         children: [
-          list || previewWidth ? artwork : /* @__PURE__ */ jsx(View55, {
+          list || previewWidth ? artwork : /* @__PURE__ */ jsx(View56, {
             style: [
               styles5.selectionRing,
               {
@@ -24744,7 +24726,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
             ],
             children: artwork
           }),
-          /* @__PURE__ */ jsx(Text9, {
+          /* @__PURE__ */ jsx(Text8, {
             ellipsizeMode: list ? void 0 : "tail",
             numberOfLines: 1,
             style: [
@@ -24769,7 +24751,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
           }) : null
         ]
       });
-      if (previewWidth) return /* @__PURE__ */ jsx(View55, {
+      if (previewWidth) return /* @__PURE__ */ jsx(View56, {
         style: [
           styles5.previewFrame,
           list ? [
@@ -24815,7 +24797,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var styles5 = useStyles11();
       var TEXT_DEFAULT = useToken(semanticColors.TEXT_DEFAULT);
       var [editing, setEditing] = (0, import_react25.useState)("idle");
-      if (editing !== "idle") return /* @__PURE__ */ jsxs(View55, {
+      if (editing !== "idle") return /* @__PURE__ */ jsxs(View56, {
         style,
         children: [
           /* @__PURE__ */ jsx(TextInput6, {
@@ -24835,7 +24817,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               }
             }
           }),
-          editing === "error" ? /* @__PURE__ */ jsx(Text9, {
+          editing === "error" ? /* @__PURE__ */ jsx(Text8, {
             style: {
               color: TEXT_DEFAULT,
               fontSize: 12
@@ -24849,7 +24831,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         accessibilityLabel: `Rename folder: ${folder.name ?? "Folder"}`,
         onPress: () => setEditing("editing"),
         style,
-        children: /* @__PURE__ */ jsx(Text9, {
+        children: /* @__PURE__ */ jsx(Text8, {
           numberOfLines: 1,
           style: styles5.folderTitle,
           children: folder.name || "Folder"
@@ -24861,7 +24843,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       var background = useToken(semanticColors.BACKGROUND_SECONDARY_ALT);
       var foreground = useToken(semanticColors.TEXT_DEFAULT);
       var muted = useToken(semanticColors.TEXT_MUTED);
-      return /* @__PURE__ */ jsx(View55, {
+      return /* @__PURE__ */ jsx(View56, {
         accessibilityRole: "tablist",
         style: filter ? styles5.filterTabs : styles5.viewTabs,
         children: options.map(([id, label, accessibilityLabel = label]) => /* @__PURE__ */ jsx(Pressable9, {
@@ -24877,7 +24859,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               backgroundColor: value === id ? background : "transparent"
             }
           ],
-          children: /* @__PURE__ */ jsx(Text9, {
+          children: /* @__PURE__ */ jsx(Text8, {
             numberOfLines: filter ? void 0 : 1,
             style: {
               color: value === id ? foreground : muted,
@@ -25169,7 +25151,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                 width: folderSize
               },
               onMomentumScrollEnd: (event) => setFolderPage(clamp(Math.round(event.nativeEvent.contentOffset.x / folderSize), 0, Math.max(0, pages.length - 1))),
-              children: pages.map((page, pageIndex) => /* @__PURE__ */ jsx(View55, {
+              children: pages.map((page, pageIndex) => /* @__PURE__ */ jsx(View56, {
                 style: [
                   styles5.folderPage,
                   {
@@ -25184,7 +25166,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               folder,
               style: styles5.folderHeading
             }, folder.id),
-            pages.length > 1 ? /* @__PURE__ */ jsx(View55, {
+            pages.length > 1 ? /* @__PURE__ */ jsx(View56, {
               pointerEvents: "box-none",
               style: styles5.pageDots,
               children: pages.map((_page, index) => /* @__PURE__ */ jsx(Pressable9, {
@@ -25345,7 +25327,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
         }, item.id);
       };
       var viewLabel = view === "servers" ? "servers" : "direct messages";
-      return signal.aborted ? null : /* @__PURE__ */ jsxs(View55, {
+      return signal.aborted ? null : /* @__PURE__ */ jsxs(View56, {
         onLayout: ({ nativeEvent: { layout } }) => {
           if (layout.width > 0 && layout.height > 0) setViewport(layout);
           if (layout.width > 0) onWidthChange(layout.width);
@@ -25361,7 +25343,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
             renderItem: (guild) => renderItem(guild, true),
             handlers: resize.handlers
           }, overlayFolder.id),
-          /* @__PURE__ */ jsx(View55, {
+          /* @__PURE__ */ jsx(View56, {
             accessibilityLabel: resize.visible ? view === "servers" ? "All servers drawer" : "Direct messages drawer" : "Server dock",
             accessibilityViewIsModal: resize.visible,
             importantForAccessibility: resize.visible ? "yes" : "auto",
@@ -25375,7 +25357,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                 width: dockSpecs.dockWidth
               }
             ],
-            children: /* @__PURE__ */ jsxs(View55, {
+            children: /* @__PURE__ */ jsxs(View56, {
               style: {
                 height: resize.height,
                 overflow: "hidden"
@@ -25402,11 +25384,11 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                   onAccessibilityAction: () => setDrawerOpen(!resize.visible),
                   onPress: () => setDrawerOpen(!resize.visible),
                   style: styles5.handle,
-                  children: /* @__PURE__ */ jsx(View55, {
+                  children: /* @__PURE__ */ jsx(View56, {
                     style: styles5.handleBar
                   })
                 }),
-                /* @__PURE__ */ jsx(View55, {
+                /* @__PURE__ */ jsx(View56, {
                   pointerEvents: expanded ? "none" : "auto",
                   accessibilityElementsHidden: resize.visible,
                   importantForAccessibility: resize.visible ? "no-hide-descendants" : "auto",
@@ -25414,7 +25396,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                     styles5.compactFace,
                     resize.compactStyle
                   ],
-                  children: /* @__PURE__ */ jsxs(View55, {
+                  children: /* @__PURE__ */ jsxs(View56, {
                     style: [
                       styles5.dockRow,
                       {
@@ -25426,7 +25408,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                         length: dockSpecs.itemCountNoExtras
                       }, (_2, index) => {
                         var node = data2.nodes[index];
-                        if (!node || node.kind === "folder" && !node.children.length) return /* @__PURE__ */ jsx(View55, {
+                        if (!node || node.kind === "folder" && !node.children.length) return /* @__PURE__ */ jsx(View56, {
                           accessibilityElementsHidden: true,
                           importantForAccessibility: "no-hide-descendants",
                           style: {
@@ -25437,7 +25419,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                         }, `spacer-${index}`);
                         return renderItem(node, false, dockSpecs.itemSize);
                       }),
-                      /* @__PURE__ */ jsx(View55, {
+                      /* @__PURE__ */ jsx(View56, {
                         style: [
                           styles5.dockDivider,
                           {
@@ -25472,7 +25454,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                     ]
                   })
                 }),
-                /* @__PURE__ */ jsx(View55, {
+                /* @__PURE__ */ jsx(View56, {
                   pointerEvents: expanded ? "auto" : "none",
                   accessibilityElementsHidden: !resize.visible,
                   importantForAccessibility: resize.visible ? "auto" : "no-hide-descendants",
@@ -25480,12 +25462,12 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                     styles5.expandedFace,
                     resize.expandedStyle
                   ],
-                  children: /* @__PURE__ */ jsxs(View55, {
+                  children: /* @__PURE__ */ jsxs(View56, {
                     style: {
                       height: drawerHeight - 16
                     },
                     children: [
-                      /* @__PURE__ */ jsxs(View55, {
+                      /* @__PURE__ */ jsxs(View56, {
                         style: styles5.header,
                         children: [
                           drawerFolder ? /* @__PURE__ */ jsxs(import_react25.Fragment, {
@@ -25537,7 +25519,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                           })
                         ]
                       }),
-                      /* @__PURE__ */ jsxs(View55, {
+                      /* @__PURE__ */ jsxs(View56, {
                         style: styles5.searchRow,
                         children: [
                           /* @__PURE__ */ jsx(TextInput6, {
@@ -25575,9 +25557,9 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                       /* @__PURE__ */ jsx(FlashList, {
                         data: visible,
                         numColumns: columns,
-                        ListEmptyComponent: /* @__PURE__ */ jsx(View55, {
+                        ListEmptyComponent: /* @__PURE__ */ jsx(View56, {
                           style: styles5.emptyContainer,
-                          children: /* @__PURE__ */ jsx(Text9, {
+                          children: /* @__PURE__ */ jsx(Text8, {
                             style: styles5.emptyText,
                             children: query.trim() ? `No ${viewLabel} match your search` : filter === "unread" ? "You're all caught up" : `No ${viewLabel} to show`
                           })
@@ -25595,7 +25577,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                         onScroll: (event) => {
                           scrollY.current = Math.max(0, event.nativeEvent.contentOffset.y);
                         },
-                        renderItem: ({ item, index }) => /* @__PURE__ */ jsx(View55, {
+                        renderItem: ({ item, index }) => /* @__PURE__ */ jsx(View56, {
                           style: {
                             marginLeft: index % columns * columnOffset,
                             width: grid ? ITEM_WIDTH : "100%",
@@ -25616,7 +25598,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               ]
             })
           }),
-          active2 ? /* @__PURE__ */ jsx(View55, {
+          active2 ? /* @__PURE__ */ jsx(View56, {
             accessibilityLabel: `Dragging ${active2.source.name ?? "Folder"}`,
             accessibilityRole: "summary",
             pointerEvents: "none",
@@ -25635,7 +25617,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               previewWidth
             })
           }) : null,
-          active2?.source.kind === "guild" && active2.source.folderId && (drawerFolder || overlayFolder) && /* @__PURE__ */ jsx(View55, {
+          active2?.source.kind === "guild" && active2.source.folderId && (drawerFolder || overlayFolder) && /* @__PURE__ */ jsx(View56, {
             ref: drag.exitTarget,
             collapsable: false,
             onLayout: drag.measureExit,
@@ -25651,7 +25633,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
                 bottom: bottomInset + 24
               }
             ],
-            children: /* @__PURE__ */ jsx(View55, {
+            children: /* @__PURE__ */ jsx(View56, {
               style: {
                 height: 42,
                 justifyContent: "center",
@@ -27234,7 +27216,7 @@ ${ruleJson}
       })
     });
   }
-  var ScrollView29, View33, Keyboard2, InputRow2;
+  var ScrollView29, View34, Keyboard2, InputRow2;
   var init_EditRule = __esm({
     "src/plugins/textreplace/ui/pages/EditRule.tsx"() {
       "use strict";
@@ -27247,10 +27229,10 @@ ${ruleJson}
       init_common();
       init_components();
       init_storage32();
-      ({ ScrollView: ScrollView29, View: View33, Keyboard: Keyboard2 } = ReactNative);
+      ({ ScrollView: ScrollView29, View: View34, Keyboard: Keyboard2 } = ReactNative);
       InputRow2 = ({ label, value, onChange, placeholder, isClearable }) => /* @__PURE__ */ jsx(TableRow, {
         label,
-        subLabel: /* @__PURE__ */ jsx(View33, {
+        subLabel: /* @__PURE__ */ jsx(View34, {
           style: {
             marginTop: 8
           },
@@ -27291,7 +27273,7 @@ ${ruleJson}
         })
       });
     };
-    return /* @__PURE__ */ jsx(View34, {
+    return /* @__PURE__ */ jsx(View35, {
       style: {
         flex: 1
       },
@@ -27308,7 +27290,7 @@ ${ruleJson}
           children: [
             /* @__PURE__ */ jsx(TableRowGroup11, {
               title: "Rules",
-              children: storage.rules.length === 0 ? /* @__PURE__ */ jsx(View34, {
+              children: storage.rules.length === 0 ? /* @__PURE__ */ jsx(View35, {
                 style: {
                   padding: 16,
                   alignItems: "center"
@@ -27342,7 +27324,7 @@ ${ruleJson}
       })
     });
   }
-  var ScrollView30, View34, TableRow6, Stack9, TableRowGroup11;
+  var ScrollView30, View35, TableRow6, Stack9, TableRowGroup11;
   var init_Settings8 = __esm({
     "src/plugins/textreplace/ui/pages/Settings.tsx"() {
       "use strict";
@@ -27354,7 +27336,7 @@ ${ruleJson}
       init_components();
       init_storage32();
       init_EditRule();
-      ({ ScrollView: ScrollView30, View: View34 } = ReactNative);
+      ({ ScrollView: ScrollView30, View: View35 } = ReactNative);
       ({ TableRow: TableRow6, Stack: Stack9, TableRowGroup: TableRowGroup11 } = components_exports);
     }
   });
@@ -27988,7 +27970,7 @@ ${ruleJson}
       })
     });
   }
-  var ScrollView32, Text8, showSimpleActionSheet6, hideActionSheet9;
+  var ScrollView32, Text7, showSimpleActionSheet6, hideActionSheet9;
   var init_settings25 = __esm({
     "src/plugins/translator/settings/index.tsx"() {
       "use strict";
@@ -28001,7 +27983,7 @@ ${ruleJson}
       init_components();
       init_storage33();
       init_TargetLang();
-      ({ ScrollView: ScrollView32, Text: Text8 } = ReactNative);
+      ({ ScrollView: ScrollView32, Text: Text7 } = ReactNative);
       ({ showSimpleActionSheet: showSimpleActionSheet6 } = findByProps("showSimpleActionSheet"));
       ({ hideActionSheet: hideActionSheet9 } = findByProps("openLazy", "hideActionSheet"));
     }
@@ -36741,14 +36723,14 @@ Type: ${asset.type}`,
     }
   });
 
-  // rain-plugins-importer:C:\Users\Cody\AppData\Local\Temp\rain-scratch\src\plugins
+  // rain-plugins-importer:C:\Users\Cody\AppData\Local\Temp\claude\C--Users-Cody-Documents-Project-NailongTweak\8555e992-a77d-4526-962e-1b0bd646c4a8\scratchpad\rain-src\src\plugins
   var plugins_exports2 = {};
   __export(plugins_exports2, {
     default: () => plugins_default2
   });
   var plugins_default2;
   var init_plugins2 = __esm({
-    "rain-plugins-importer:C:\\Users\\Cody\\AppData\\Local\\Temp\\rain-scratch\\src\\plugins"() {
+    "rain-plugins-importer:C:\\Users\\Cody\\AppData\\Local\\Temp\\claude\\C--Users-Cody-Documents-Project-NailongTweak\\8555e992-a77d-4526-962e-1b0bd646c4a8\\scratchpad\\rain-src\\src\\plugins"() {
       init_asyncIteratorSymbol();
       init_promiseAllSettled();
       plugins_default2 = {

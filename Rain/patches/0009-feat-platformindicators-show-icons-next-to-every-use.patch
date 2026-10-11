@@ -1,0 +1,488 @@
+From bd607991d5f45df1d773817dc3046d10331d2d6e Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sun, 11 Oct 2026 16:27:28 +0800
+Subject: [PATCH] feat(platformindicators): show icons next to every username
+ on newer Discord
+
+Discord 348 renders member lists, the DM list, DM/channel headers, profiles
+and the You tab through one UsernameWithEffects component whose functions are
+anonymous under the React Compiler, so the old name-based patches only hit
+UserRow. Patch that component by file path, hide the default mobile status
+via Status/Avatar by file path, and keep the old patches as a fallback.
+Icons now re-render on presence changes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../PresenceUpdatedContainer.tsx              |  24 --
+ .../platformindicators/RerenderContainer.tsx  |  22 --
+ .../platformindicators/StatusIcons.tsx        |  66 ++----
+ src/plugins/platformindicators/index.tsx      | 221 +++++++++---------
+ src/plugins/platformindicators/settings.tsx   |  17 +-
+ src/plugins/platformindicators/storage.ts     |   8 +-
+ 6 files changed, 140 insertions(+), 218 deletions(-)
+ delete mode 100644 src/plugins/platformindicators/PresenceUpdatedContainer.tsx
+ delete mode 100644 src/plugins/platformindicators/RerenderContainer.tsx
+
+diff --git a/src/plugins/platformindicators/PresenceUpdatedContainer.tsx b/src/plugins/platformindicators/PresenceUpdatedContainer.tsx
+deleted file mode 100644
+index a4da653..0000000
+--- a/src/plugins/platformindicators/PresenceUpdatedContainer.tsx
++++ /dev/null
+@@ -1,24 +0,0 @@
+-import { FluxDispatcher } from "@metro/common";
+-import React, { useEffect,useState } from "react";
+-
+-const PresenceUpdatedContainer = ({ children }: { children: React.ReactNode }) => {
+-    const [counter, setCounter] = useState(0);
+-    useEffect(() => {
+-
+-        const presenceUpdate = () => {
+-            setCounter(prevCounter => prevCounter + 1);
+-        };
+-        FluxDispatcher.subscribe("PRESENCE_UPDATES",presenceUpdate);
+-        return () => {
+-            FluxDispatcher.unsubscribe("PRESENCE_UPDATES",presenceUpdate);
+-        };
+-    }, []);
+-
+-    return (
+-        React.Children.map(children, (child, index) => {
+-            return React.cloneElement(child as React.ReactElement, { key: `${index}-${counter}` });
+-        })
+-    );
+-};
+-
+-export default PresenceUpdatedContainer;
+diff --git a/src/plugins/platformindicators/RerenderContainer.tsx b/src/plugins/platformindicators/RerenderContainer.tsx
+deleted file mode 100644
+index 6f87ced..0000000
+--- a/src/plugins/platformindicators/RerenderContainer.tsx
++++ /dev/null
+@@ -1,22 +0,0 @@
+-import React, { useEffect,useState } from "react";
+-
+-const RerenderContainer = ({ children }: { children: React.ReactNode }) => {
+-    const [counter, setCounter] = useState(0);
+-
+-    useEffect(() => {
+-        const interval = setInterval(() => {
+-            setCounter(prevCounter => prevCounter + 1);
+-        }, 2000);
+-        return () => {
+-            clearInterval(interval);
+-        };
+-    }, []);
+-
+-    return (
+-        React.Children.map(children, (child, index) => {
+-            return React.cloneElement(child as React.ReactElement, { key: `${index}-${counter}` });
+-        })
+-    );
+-};
+-
+-export default RerenderContainer;
+diff --git a/src/plugins/platformindicators/StatusIcons.tsx b/src/plugins/platformindicators/StatusIcons.tsx
+index 117c240..416629f 100644
+--- a/src/plugins/platformindicators/StatusIcons.tsx
++++ b/src/plugins/platformindicators/StatusIcons.tsx
+@@ -1,65 +1,47 @@
+-
++import { FluxUtils, ReactNative } from "@metro/common";
+ import { PresenceStore, SessionsStore, UserStore } from "@metro/common/stores";
+ 
+ import { getStatusColor } from "./colors";
+ import StatusIcon from "./StatusIcon";
+ import { usePlatformIndicatorSettings } from "./storage";
+ 
+-let statusCache: any;
+-let statusCacheHits = 0;
+-let statusCacheTimeout: NodeJS.Timeout | null | number;
+-let currentUserId: string | null;
+-
+-function queryPresenceStoreWithCache(){
+-    if(!statusCacheTimeout){
+-        statusCacheTimeout = setTimeout(() => {
+-            statusCacheHits = 0;
+-            statusCacheTimeout = null;
+-        },5000);
+-    }
+-
+-    if(!statusCache || statusCacheHits === 0){
+-        statusCache = PresenceStore.getState();
+-    }
+-
+-    statusCacheHits = (statusCacheHits+1) % 20;
+-
+-    return statusCache;
+-}
++const { View } = ReactNative;
+ 
+ function getUserStatuses(userId: string): Record<string, string> | undefined {
+-    let statuses: Record<string, string> | undefined;
+-
+-    if(!currentUserId){
+-        currentUserId = UserStore.getCurrentUser()?.id;
+-    }
+-
+-    if(userId === currentUserId){
++    if (userId === UserStore.getCurrentUser()?.id) {
+         const sessions = SessionsStore.getSessions() as Record<string, { clientInfo: { client: string }, status: string }>;
+-        statuses = Object.values(sessions).reduce<Record<string, string>>((acc, curr) => {
++        return Object.values(sessions ?? {}).reduce<Record<string, string>>((acc, curr) => {
+             if (curr.clientInfo.client !== "unknown")
+                 acc[curr.clientInfo.client] = curr.status;
+             return acc;
+-        }, {} as Record<string, string>);
+-    } else {
+-        statuses = queryPresenceStoreWithCache()?.clientStatuses[userId];
++        }, {});
+     }
+-    return statuses;
++
++    return PresenceStore.getClientStatus?.(userId) ?? PresenceStore.getState()?.clientStatuses?.[userId];
++}
++
++// Serialized as "platform:status,..." so useStateFromStores can compare snapshots by value.
++function getStatusKey(userId: string) {
++    return Object.entries(getUserStatuses(userId) ?? {}).map(([platform, status]) => `${platform}:${status}`).join(",");
+ }
+ 
+ export default function StatusIcons(props: { userId: string; size?: number }) {
+     const settings = usePlatformIndicatorSettings();
+-
+-    const userId = props.userId;
+-
++    const { userId } = props;
+     const iconSize = props.size ?? 16;
+ 
+-    const statuses = getUserStatuses(userId);
++    const statusKey: string = FluxUtils?.useStateFromStores
++        ? FluxUtils.useStateFromStores([PresenceStore, SessionsStore], () => getStatusKey(userId), [userId])
++        : getStatusKey(userId);
++
++    if (!statusKey) return null;
+ 
+     return (
+-        <>
+-            {Object.entries(statuses ?? {}).map(([platform, status]) =>
+-                <StatusIcon platform={platform} color={getStatusColor(status, settings.useThemeColors)} iconSize={iconSize}/>)}
+-        </>
++        <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4 }}>
++            {statusKey.split(",").map(entry => {
++                const [platform, status] = entry.split(":");
++                return <StatusIcon key={platform} platform={platform} color={getStatusColor(status, settings.useThemeColors)} iconSize={iconSize} />;
++            })}
++        </View>
+     );
+ }
+diff --git a/src/plugins/platformindicators/index.tsx b/src/plugins/platformindicators/index.tsx
+index 79fdd84..eb02d6a 100644
+--- a/src/plugins/platformindicators/index.tsx
++++ b/src/plugins/platformindicators/index.tsx
+@@ -1,139 +1,138 @@
+-import { findAssetId } from "@api/assets";
+ import { after, before } from "@api/patcher";
+ import { waitForHydration } from "@api/storage";
+ import { findInReactTree } from "@lib/utils";
+-import { findByName,findByProps, findByTypeName, findByTypeNameAll } from "@metro";
+-import { ReactNative } from "@metro/common";
++import { findByFilePath, findByName, findByProps, findByTypeName, findByTypeNameAll } from "@metro";
++import { React, ReactNative } from "@metro/common";
+ import { definePlugin } from "@plugins";
+ import { Contributors,Developers } from "@rain/Developers";
+ 
+-import PresenceUpdatedContainer from "./PresenceUpdatedContainer";
+ import Settings from "./settings";
+ import StatusIcons from "./StatusIcons";
+ import { platformIndicatorSettings,usePlatformIndicatorSettings } from "./storage";
+ 
+-const { View, Text } = ReactNative;
++const { View } = ReactNative;
+ 
+ type Unpatch = () => void;
+ 
+ const unpatches: Unpatch[] = [];
+ 
+-export default definePlugin({
+-    name: "PlatformIndicators",
+-    description: "Shows platform indicators on users",
+-    author: [Contributors.MSMA, Developers.kmmiio99o],
+-    id: "platformindicators",
+-    version: "1.0.0",
+-    async start() {
+-        waitForHydration(usePlatformIndicatorSettings);
+-
+-        const debugLabels = false;
+-
+-        // tabs v2 dm header removed per user request
+-
+-
+-        // DisplayName patch (Chat messages and elsewhere)
+-        const DisplayName = findByName("DisplayName", false);
+-        if (DisplayName) {
+-            unpatches.push(after("default", DisplayName, (args, res) => {
+-                const user = args[0]?.user;
+-                if (!user || !user.id || !res) return;
+-
+-                const row = findInReactTree(res, c => c?.props?.style?.flexDirection === "row");
+-                if (row?.props?.children && Array.isArray(row.props.children)) {
+-                    row.props.children.push(
+-                        <View key="DisplayNamePlatformIndicators" style={{ marginLeft: 4, flexDirection: "row", alignItems: "center", flexShrink: 0 }}>
+-                            <StatusIcons userId={user.id} />
+-                        </View>
+-                    );
+-                }
+-            }));
++const hideMobileStatus = (args: any[]) => {
++    if (args?.[0] && platformIndicatorSettings.removeDefaultMobile) args[0].isMobileOnline = false;
++};
++
++// Discord 348+: one shared name component renders the member list, DM list, DM header,
++// channel details header, profile and You tab names. Its component functions are anonymous
++// under the React Compiler, so it can only be found by file path.
++const UsernameWithEffects = findByFilePath("modules/display_name_styles/native/UsernameWithEffects.tsx", true);
++
++function patchUsernameWithEffects() {
++    if (!UsernameWithEffects?.type) return false;
++
++    unpatches.push(after("type", UsernameWithEffects, ([props]: any[], res: any) => {
++        // pendingDisplayNameStyles is only passed by the display name style editor previews
++        if (!React.isValidElement(res) || !props?.userId || props.pendingDisplayNameStyles) return;
++        if (!platformIndicatorSettings.usernames) return;
++
++        return (
++            <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1, minWidth: 0 }}>
++                {React.cloneElement(res as React.ReactElement<any>, { style: [(res.props as any)?.style, { flexShrink: 1 }] })}
++                <StatusIcons userId={props.userId} />
++            </View>
++        );
++    }));
++    return true;
++}
++
++// UserRow only uses UsernameWithEffects for names without role gradient colors,
++// so it still needs its own patch for the rest
++function patchUserRows() {
++    let patchedAvatar = false;
++    const rowPatch = (args: any[], res: any) => {
++        const user = args[0]?.user;
++        if (!user?.id || !res?.props?.label || !platformIndicatorSettings.usernames) return;
++        if (UsernameWithEffects && findInReactTree(res.props.label, c => c?.type === UsernameWithEffects)) return;
++        if (findInReactTree(res.props.label, c => c?.key === "TabsV2MemberListStatusIconsView")) return;
++
++        res.props.label = (
++            <View style={{ flexDirection: "row", alignItems: "center" }}>
++                {res.props.label}
++                <StatusIcons key="TabsV2MemberListStatusIconsView" userId={user.id} />
++            </View>
++        );
++        if (!patchedAvatar && res.props.icon?.type) {
++            unpatches.push(before("type", res.props.icon.type, hideMobileStatus));
++            patchedAvatar = true;
+         }
++    };
++    findByTypeNameAll("UserRow").forEach(UserRow => unpatches.push(after("type", UserRow, rowPatch)));
++}
++
++function patchDefaultStatus() {
++    const Status = findByFilePath("design/void/Status/native/Status.tsx") ?? findByName("Status", false);
++    if (Status?.default) unpatches.push(before("default", Status, hideMobileStatus));
++    if (Status?.StatusWithTyping) unpatches.push(before("StatusWithTyping", Status, hideMobileStatus));
++
++    // Avatar also reads isMobileOnline to cut the phone-shaped hole for the status
++    const Avatar = findByFilePath("design/void/Avatar/native/Avatar.tsx", true);
++    if (Avatar?.type) unpatches.push(before("type", Avatar, hideMobileStatus));
++}
++
++// Older Discord builds where these components still had names
++function patchLegacyLocations() {
++    const DisplayName = findByName("DisplayName", false);
++    if (DisplayName) {
++        unpatches.push(after("default", DisplayName, (args, res) => {
++            const user = args[0]?.user;
++            if (!user?.id || !res || !platformIndicatorSettings.usernames) return;
+ 
+-        // Status patch
+-        const Status = findByName("Status", false);
+-        unpatches.push(before("default", Status, args => {
+-            if (!args) return;
+-            if (!args[0]) return;
+-            if (!platformIndicatorSettings.removeDefaultMobile) return;
+-            args[0].isMobileOnline = false;
++            const row = findInReactTree(res, c => c?.props?.style?.flexDirection === "row");
++            if (!row?.props) return;
++            if (!Array.isArray(row.props.children)) row.props.children = [row.props.children];
++            if (row.props.children.some((c: any) => c?.key === "DisplayNamePlatformIndicators")) return;
++            row.props.children.push(<StatusIcons key="DisplayNamePlatformIndicators" userId={user.id} />);
+         }));
++    }
+ 
+-        // Guild member row
+-        const Rows = findByProps("GuildMemberRow");
+-        if (Rows?.GuildMemberRow) {
+-            unpatches.push(after("type", Rows.GuildMemberRow, (args: any[], res: any) => {
+-                const user = args[0]?.user;
+-                if (!platformIndicatorSettings.userList) return;
+-                const statusIconsView = findInReactTree(res, c => c.key === "GuildMemberRowStatusIconsView");
+-                if (!statusIconsView) {
+-                    const row = findInReactTree(res, c => c.props?.style?.flexDirection === "row");
+-                    if (row) {
+-                        row.props.children.splice(2, 0,
+-                            <View
+-                                key="GuildMemberRowStatusIconsView"
+-                                style={{
+-                                    flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4
+-                                }}>
+-                                {debugLabels ? <Text>GMRSIV</Text> : <StatusIcons userId={user.id} />}
+-                            </View>
+-                        );
+-                    }
+-                }
+-            }));
+-        }
+-
+-        let patchedAvatar = false;
+-        // User row patch
+-        const rowPatch = (args: any[], res: any) => {
++    const Rows = findByProps("GuildMemberRow");
++    if (Rows?.GuildMemberRow) {
++        unpatches.push(after("type", Rows.GuildMemberRow, (args: any[], res: any) => {
+             const user = args[0]?.user;
+-            if (!platformIndicatorSettings.userList) return;
+-
+-            const modifiedStatusIcons = findInReactTree(res?.props?.label, c => c.key === "TabsV2MemberListStatusIconsView");
+-            if (!modifiedStatusIcons) {
+-                res.props.label = (
+-                    <View style={{
+-                        flexDirection: "row",
+-                        alignItems: "center"
+-                    }}
+-                    key="TabsV2MemberListStatusIconsView">
+-                        {res.props.label}
+-                        <View key="TabsV2MemberListStatusIconsView" style={{
+-                            flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4
+-                        }}>
+-                            {debugLabels ? <Text>TV2MLSIV</Text> : <StatusIcons userId={user.id} />}
+-                        </View>
+-                    </View>
+-                );
+-                if (!patchedAvatar && res.props.icon?.type) {
+-                    unpatches.push(before("type", res.props.icon.type, args => {
+-                        if (platformIndicatorSettings.removeDefaultMobile) {
+-                            args[0].isMobileOnline = false;
+-                        }
+-                    }));
+-                    patchedAvatar = true;
+-                }
+-            }
+-        };
++            if (!user?.id || !platformIndicatorSettings.usernames) return;
++            if (findInReactTree(res, c => c?.key === "GuildMemberRowStatusIconsView")) return;
+ 
+-        findByTypeNameAll("UserRow").forEach(UserRow => unpatches.push(after("type", UserRow, rowPatch)));
++            const row = findInReactTree(res, c => c?.props?.style?.flexDirection === "row");
++            if (Array.isArray(row?.props?.children)) {
++                row.props.children.splice(2, 0, <StatusIcons key="GuildMemberRowStatusIconsView" userId={user.id} />);
++            }
++        }));
++    }
+ 
+-        // Messages item channel content
+-        const MessagesItemChannelContent = findByTypeName("MessagesItemChannelContent");
++    const MessagesItemChannelContent = findByTypeName("MessagesItemChannelContent");
++    if (MessagesItemChannelContent) {
+         unpatches.push(after("type", MessagesItemChannelContent, (args, res) => {
+             const channel = args[0]?.channel;
+-            if (channel?.recipients?.length === 1) {
+-                const userId = channel.recipients[0];
+-                const textContainer = findInReactTree(res, m => m.props?.children?.[0]?.props?.variant === "redesign/channel-title/semibold");
+-                if (textContainer) {
+-                    textContainer.props.children.push(<View key="TabsV2RedesignDMListIcons" style={{
+-                        flexDirection: "row", alignItems: "center", flexShrink: 0, marginLeft: 4
+-                    }}>
+-                        {debugLabels ? <Text>TV2RDMLI</Text> : <StatusIcons userId={userId} />}
+-                    </View>);
+-                }
+-            }
++            if (channel?.recipients?.length !== 1 || !platformIndicatorSettings.usernames) return;
++
++            const textContainer = findInReactTree(res, m => m.props?.children?.[0]?.props?.variant === "redesign/channel-title/semibold");
++            if (!Array.isArray(textContainer?.props?.children)) return;
++            if (textContainer.props.children.some((c: any) => c?.key === "TabsV2RedesignDMListIcons")) return;
++            textContainer.props.children.push(<StatusIcons key="TabsV2RedesignDMListIcons" userId={channel.recipients[0]} />);
+         }));
++    }
++}
++
++export default definePlugin({
++    name: "PlatformIndicators",
++    description: "Shows platform indicators on users",
++    author: [Contributors.MSMA, Developers.kmmiio99o],
++    id: "platformindicators",
++    version: "1.1.0",
++    async start() {
++        waitForHydration(usePlatformIndicatorSettings);
++
++        patchDefaultStatus();
++        patchUserRows();
++        if (!patchUsernameWithEffects()) patchLegacyLocations();
+     },
+     stop() {
+         for (const unpatch of unpatches) unpatch();
+diff --git a/src/plugins/platformindicators/settings.tsx b/src/plugins/platformindicators/settings.tsx
+index 3c9b369..ec4f74c 100644
+--- a/src/plugins/platformindicators/settings.tsx
++++ b/src/plugins/platformindicators/settings.tsx
+@@ -15,19 +15,10 @@ export default function Settings() {
+         >
+             <TableRowGroup title="Platform Indicator">
+                 <TableSwitchRow
+-                    label="Show icons on the dm top bar"
+-                    value={settings.dmTopBar ?? true}
+-                    onValueChange={(v: boolean) => usePlatformIndicatorSettings.getState().updateSettings({ dmTopBar: v })}
+-                />
+-                <TableSwitchRow
+-                    label="Show icons on the users and DMs list"
+-                    value={settings.userList ?? true}
+-                    onValueChange={(v: boolean) => usePlatformIndicatorSettings.getState().updateSettings({ userList: v })}
+-                />
+-                <TableSwitchRow
+-                    label="Show icons on user profiles"
+-                    value={settings.profileUsername ?? true}
+-                    onValueChange={(v: boolean) => usePlatformIndicatorSettings.getState().updateSettings({ profileUsername: v })}
++                    label="Show icons next to usernames"
++                    subLabel="Member lists, DM list, DM header, profiles and the You tab"
++                    value={settings.usernames ?? true}
++                    onValueChange={(v: boolean) => usePlatformIndicatorSettings.getState().updateSettings({ usernames: v })}
+                 />
+                 <TableSwitchRow
+                     label="Hide mobile status from the normal indicator"
+diff --git a/src/plugins/platformindicators/storage.ts b/src/plugins/platformindicators/storage.ts
+index 0ef330e..039ddae 100644
+--- a/src/plugins/platformindicators/storage.ts
++++ b/src/plugins/platformindicators/storage.ts
+@@ -1,9 +1,7 @@
+ import { createPluginStore } from "@api/storage";
+ 
+ interface PlatformIndicatorSettings {
+-    dmTopBar: boolean;
+-    userList: boolean;
+-    profileUsername: boolean;
++    usernames: boolean;
+     removeDefaultMobile: boolean;
+     useThemeColors: boolean;
+ }
+@@ -12,9 +10,7 @@ export const {
+     useStore: usePlatformIndicatorSettings,
+     settings: platformIndicatorSettings,
+ } = createPluginStore<PlatformIndicatorSettings>("platformindicators", {
+-    dmTopBar: true,
+-    userList: true,
+-    profileUsername: true,
++    usernames: true,
+     removeDefaultMobile: true,
+     useThemeColors: true,
+ });
+-- 
+2.55.0.windows.5
+
