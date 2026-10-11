@@ -1,0 +1,262 @@
+From 46c479b13e085723cb007b41e86796f2e0d7fa67 Mon Sep 17 00:00:00 2001
+From: kurtxtb <s0917077331@gmail.com>
+Date: Sun, 11 Oct 2026 18:19:19 +0800
+Subject: [PATCH] feat(plugins): add PlatformSpoof
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Rewrite of fshin's Revenge PlatformSpoof for Rain: patch the live
+GatewaySocket's send (an instance field on Discord 348) to swap
+properties.browser in IDENTIFY, and re-identify only when the live session
+doesn't match the chosen platform — on CONNECTION_OPEN (covers the native
+fast-connect identify at boot) and when the setting changes — instead of
+polling the socket every 250ms.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/plugins/platformspoof/gateway.ts   | 87 ++++++++++++++++++++++++++
+ src/plugins/platformspoof/index.ts     | 28 +++++++++
+ src/plugins/platformspoof/settings.tsx | 49 +++++++++++++++
+ src/plugins/platformspoof/storage.ts   | 29 +++++++++
+ src/rain/Developers.ts                 |  4 ++
+ 5 files changed, 197 insertions(+)
+ create mode 100644 src/plugins/platformspoof/gateway.ts
+ create mode 100644 src/plugins/platformspoof/index.ts
+ create mode 100644 src/plugins/platformspoof/settings.tsx
+ create mode 100644 src/plugins/platformspoof/storage.ts
+
+diff --git a/src/plugins/platformspoof/gateway.ts b/src/plugins/platformspoof/gateway.ts
+new file mode 100644
+index 0000000..8a13416
+--- /dev/null
++++ b/src/plugins/platformspoof/gateway.ts
+@@ -0,0 +1,87 @@
++import { before } from "@api/patcher";
++import { findByStoreNameLazy } from "@metro/wrappers";
++
++import { platformSpoofSettings, SPOOF_BROWSERS, SpoofPlatform } from "./storage";
++
++const GatewayConnectionStore = findByStoreNameLazy("GatewayConnectionStore");
++
++const IDENTIFY_OPCODE = 2;
++
++let active = false;
++let patchedSocket: any = null;
++let unpatchSend: (() => void) | null = null;
++// Platform the patched socket's session identified as; null until an IDENTIFY passes through
++// our patch (iOS fast-connect identifies natively at boot, before JS can touch it)
++let identifiedAs: SpoofPlatform | null = null;
++// Re-identify at most once per chosen platform so a missed IDENTIFY can't cause a reconnect loop
++let reidentifiedFor: SpoofPlatform | null = null;
++
++function getSocket() {
++    return GatewayConnectionStore.getSocket?.();
++}
++
++// GatewaySocket defines send as an instance field, so the live socket is patched rather than the class
++function patchSocket(socket: any) {
++    if (!socket || socket === patchedSocket || typeof socket.send !== "function") return;
++
++    unpatchSend?.();
++    patchedSocket = socket;
++    identifiedAs = null;
++    reidentifiedFor = null;
++
++    unpatchSend = before("send", socket, args => {
++        const [op, payload] = args;
++        if (op !== IDENTIFY_OPCODE || !payload?.properties) return;
++
++        const { platform } = platformSpoofSettings;
++        const browser = SPOOF_BROWSERS[platform];
++        identifiedAs = platform;
++        reidentifiedFor = null;
++        // Replace instead of mutating: payload.properties is the socket's own properties object
++        if (browser) payload.properties = { ...payload.properties, browser };
++    });
++}
++
++function reidentify(socket: any) {
++    if (!socket?.webSocket) return;
++
++    // Dropping the session makes the reconnect send IDENTIFY instead of RESUME
++    socket.sessionId = null;
++    socket.seq = 0;
++    socket.nextReconnectIsImmediate = true;
++    socket.webSocket.close();
++}
++
++// Re-identify when the live session doesn't match the chosen platform
++export function syncSession() {
++    if (!active) return;
++
++    const socket = getSocket();
++    patchSocket(socket);
++    if (!socket || socket !== patchedSocket) return;
++    if (!(socket.isSessionEstablished?.() ?? socket.isConnected?.())) return;
++
++    const { platform } = platformSpoofSettings;
++    const current = identifiedAs ?? SpoofPlatform.Off;
++    if (current === platform || reidentifiedFor === platform) return;
++
++    reidentifiedFor = platform;
++    reidentify(socket);
++}
++
++export function startGateway() {
++    active = true;
++    syncSession();
++}
++
++export function stopGateway() {
++    active = false;
++    unpatchSend?.();
++    unpatchSend = null;
++
++    // Leave the session identified with the real client properties
++    if (identifiedAs && identifiedAs !== SpoofPlatform.Off) reidentify(patchedSocket);
++    patchedSocket = null;
++    identifiedAs = null;
++    reidentifiedFor = null;
++}
+diff --git a/src/plugins/platformspoof/index.ts b/src/plugins/platformspoof/index.ts
+new file mode 100644
+index 0000000..3fcf28b
+--- /dev/null
++++ b/src/plugins/platformspoof/index.ts
+@@ -0,0 +1,28 @@
++import { waitForHydration } from "@api/storage";
++import { FluxDispatcher } from "@metro/common";
++import { definePlugin } from "@plugins";
++import { Contributors } from "@rain/Developers";
++
++import { startGateway, stopGateway, syncSession } from "./gateway";
++import Settings from "./settings";
++import { usePlatformSpoofSettings } from "./storage";
++
++export default definePlugin({
++    name: "PlatformSpoof",
++    description: "Shows you online as Desktop, Web, VR or Console instead of mobile",
++    author: [Contributors.fshin],
++    id: "platformspoof",
++    version: "1.0.0",
++    async start() {
++        await waitForHydration(usePlatformSpoofSettings);
++
++        // Fires after every fresh session, including the native fast-connect one at boot
++        FluxDispatcher.subscribe("CONNECTION_OPEN", syncSession);
++        startGateway();
++    },
++    stop() {
++        FluxDispatcher.unsubscribe("CONNECTION_OPEN", syncSession);
++        stopGateway();
++    },
++    settings: Settings,
++});
+diff --git a/src/plugins/platformspoof/settings.tsx b/src/plugins/platformspoof/settings.tsx
+new file mode 100644
+index 0000000..3462a43
+--- /dev/null
++++ b/src/plugins/platformspoof/settings.tsx
+@@ -0,0 +1,49 @@
++import { findAssetId } from "@api/assets";
++import { Stack, TableRadioGroup, TableRadioRow, TableRow } from "@metro/common/components";
++import { ScrollView } from "react-native";
++
++import { syncSession } from "./gateway";
++import { SpoofPlatform, usePlatformSpoofSettings } from "./storage";
++
++const PLATFORMS: { value: SpoofPlatform; label: string; subLabel: string; icons: string[] }[] = [
++    { value: SpoofPlatform.Off, label: "Off", subLabel: "Show your real mobile status", icons: ["MobilePhoneIcon"] },
++    { value: SpoofPlatform.Desktop, label: "Desktop", subLabel: "Show as the desktop client", icons: ["ScreenIcon", "ic_monitor"] },
++    { value: SpoofPlatform.Web, label: "Web", subLabel: "Show as a browser", icons: ["GlobeEarthIcon"] },
++    { value: SpoofPlatform.VR, label: "VR", subLabel: "Show as a VR headset", icons: ["VrHeadsetIcon", "ic_vr_headset_24px"] },
++    { value: SpoofPlatform.Console, label: "Console", subLabel: "Show as a console", icons: ["GameControllerIcon", "ic_playstation_device_ps5_32px"] },
++];
++
++function PlatformIcon({ names }: { names: string[] }) {
++    const source = names.map(findAssetId).find(id => id != null);
++    return source != null ? <TableRow.Icon source={source} /> : null;
++}
++
++export default function PlatformSpoofSettings() {
++    const { platform, updateSettings } = usePlatformSpoofSettings();
++
++    return (
++        <ScrollView style={{ flex: 1 }}>
++            <Stack style={{ paddingVertical: 24, paddingHorizontal: 12 }} spacing={24}>
++                <TableRadioGroup
++                    title="Show me online as"
++                    value={platform}
++                    onChange={(v: string) => {
++                        updateSettings({ platform: v as SpoofPlatform });
++                        // Applies by reconnecting the gateway, which takes a moment
++                        syncSession();
++                    }}
++                >
++                    {PLATFORMS.map(p => (
++                        <TableRadioRow
++                            key={p.value}
++                            label={p.label}
++                            subLabel={p.subLabel}
++                            value={p.value}
++                            icon={<PlatformIcon names={p.icons} />}
++                        />
++                    ))}
++                </TableRadioGroup>
++            </Stack>
++        </ScrollView>
++    );
++}
+diff --git a/src/plugins/platformspoof/storage.ts b/src/plugins/platformspoof/storage.ts
+new file mode 100644
+index 0000000..6708e76
+--- /dev/null
++++ b/src/plugins/platformspoof/storage.ts
+@@ -0,0 +1,29 @@
++import { createPluginStore } from "@api/storage";
++
++export enum SpoofPlatform {
++    Off = "off",
++    Desktop = "desktop",
++    Web = "web",
++    VR = "vr",
++    Console = "embedded",
++}
++
++// The gateway derives the platform a session shows up as from properties.browser
++export const SPOOF_BROWSERS: Record<SpoofPlatform, string | null> = {
++    [SpoofPlatform.Off]: null,
++    [SpoofPlatform.Desktop]: "Discord Client",
++    [SpoofPlatform.Web]: "Chrome",
++    [SpoofPlatform.VR]: "Discord VR",
++    [SpoofPlatform.Console]: "Discord Embedded",
++};
++
++interface PlatformSpoofSettings {
++    platform: SpoofPlatform;
++}
++
++export const {
++    useStore: usePlatformSpoofSettings,
++    settings: platformSpoofSettings,
++} = createPluginStore<PlatformSpoofSettings>("platformspoof", {
++    platform: SpoofPlatform.Off,
++});
+diff --git a/src/rain/Developers.ts b/src/rain/Developers.ts
+index a48f287..f692fcc 100644
+--- a/src/rain/Developers.ts
++++ b/src/rain/Developers.ts
+@@ -179,5 +179,9 @@ export const Contributors = {
+     baxter: {
+         name: "baxter.zip",
+         id: 554042298053427211n,
++    },
++    fshin: {
++        name: "fshin",
++        id: 1381008677301129257n,
+     }
+ } satisfies Record<string, developer>;
+-- 
+2.55.0.windows.5
+
