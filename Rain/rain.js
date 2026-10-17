@@ -1305,13 +1305,16 @@
               importAll.default = exps;
               return importAll;
             };
-            origFunc(...args);
-            if (!isBadExports(moduleObject.exports)) {
-              onModuleRequire(moduleObject.exports, id);
-            } else {
-              blacklistModule(id);
+            try {
+              origFunc(...args);
+              if (!isBadExports(moduleObject.exports)) {
+                onModuleRequire(moduleObject.exports, id);
+              } else {
+                blacklistModule(id);
+              }
+            } finally {
+              _importingModuleId = originalImportingId;
             }
-            _importingModuleId = originalImportingId;
           });
         }
       };
@@ -6552,9 +6555,9 @@
             openUserSettings,
             IconButton: IconButton2
           };
-          var YouBarBackground = findByTypeName("YouBarBackground");
-          var YouBarNameplate = findByTypeName("YouBarNameplate");
-          var YouBarNotificationsButton = findByTypeName("YouBarNotificationsButton");
+          var YouBarBackground = findByFilePath("modules/main_tabs_v2/native/you_bar/YouBarBackground.tsx", true) ?? findByTypeName("YouBarBackground");
+          var YouBarNameplate = findByFilePath("modules/main_tabs_v2/native/you_bar/YouBarNameplate.tsx", true) ?? findByTypeName("YouBarNameplate");
+          var YouBarNotificationsButton = findByFilePath("modules/main_tabs_v2/native/you_bar/YouBarNotificationsButton.tsx", true) ?? findByTypeName("YouBarNotificationsButton");
           if (YouBarBackground || YouBarNameplate || YouBarNotificationsButton) {
             patches6.push(...patchFuture(YouBarBackground, YouBarNameplate, YouBarNotificationsButton, options));
           } else {
@@ -9006,10 +9009,10 @@ ${pendingInsertLink}` : pendingInsertLink;
         flag2
       ]);
     };
-    add(find3.byName("CutoutableAvatarDecoration", false), "default", "hideAvatarDecorations");
+    add(findByFilePath("modules/collectibles/native/components/CutoutableAvatarDecoration.tsx", false) ?? find3.byName("CutoutableAvatarDecoration", false), "default", "hideAvatarDecorations");
     add(find3.byProps("useAvatarDecoration", "getAvatarDecoration"), "useAvatarDecoration", "hideAvatarDecorations");
     add(find3.byName("Nameplate", false), "default", "hideNameplates");
-    add(find3.byTypeName("YouBarNameplate", false), "default", "hideNameplates", true);
+    add(findByFilePath("modules/main_tabs_v2/native/you_bar/YouBarNameplate.tsx", false) ?? find3.byTypeName("YouBarNameplate", false), "default", "hideNameplates", true);
     add(find3.byProps("useNameplate"), "useNameplate", "hideNameplates");
     add(find3.byProps("usePreloadProfileEffect"), "default", "hideProfileEffects");
     add(find3.byName("ProfileFrame", false), "default", "hideProfileFrames");
@@ -9872,40 +9875,54 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_i18n();
       init_constants();
       init_AuthorizationStore();
-      ({ pushModal, popModal } = findByProps("pushModal"));
-      OAuth2AuthorizeModal = findByName("OAuth2AuthorizeModal");
-      showAuthorizationModal_default = (() => pushModal({
-        key: "oauth2-authorize",
-        modal: {
-          key: "oauth2-authorize",
-          modal: OAuth2AuthorizeModal,
-          animation: "slide-up",
-          shouldPersistUnderModals: false,
-          props: {
-            clientId: CLIENT_ID,
-            redirectUri: AUTHORIZE_URL,
-            scopes: [
-              "identify"
-            ],
-            responseType: "code",
-            permissions: 0n,
-            cancelCompletesFlow: false,
-            callback: ({ location }) => _async_to_generator(function* () {
-              var url2 = new URL(location);
-              url2.searchParams.append("client", Strings.RAIN);
-              var req = yield fetch(url2);
-              if (req?.ok) {
-                var ResponseText = yield req.text();
-                useAuthorizationStore.getState().setToken(ResponseText);
-              } else {
-                popModal("oauth2-authorize");
-              }
-            })(),
-            dismissOAuthModal: () => popModal("oauth2-authorize")
-          },
-          closable: true
+      ({ pushModal, popModal } = findByProps("pushModal") ?? {});
+      OAuth2AuthorizeModal = findByFilePath("modules/oauth2/native/OAuth2AuthorizeModal.tsx", true) ?? findByName("OAuth2AuthorizeModal");
+      showAuthorizationModal_default = (() => {
+        if (!pushModal || !popModal) {
+          ({ pushModal, popModal } = findByProps("pushModal") ?? {});
         }
-      }));
+        OAuth2AuthorizeModal ??= findByFilePath("modules/oauth2/native/OAuth2AuthorizeModal.tsx", true) ?? findByName("OAuth2AuthorizeModal");
+        var closeModal = () => {
+          popModal?.("oauth2-authorize");
+          findByProps("popWithKey")?.popWithKey?.("oauth2-authorize");
+        };
+        var modalProps = {
+          clientId: CLIENT_ID,
+          redirectUri: AUTHORIZE_URL,
+          scopes: [
+            "identify"
+          ],
+          responseType: "code",
+          permissions: 0n,
+          cancelCompletesFlow: false,
+          callback: ({ location }) => _async_to_generator(function* () {
+            var url2 = new URL(location);
+            url2.searchParams.append("client", Strings.RAIN);
+            var req = yield fetch(url2);
+            if (req?.ok) {
+              var ResponseText = yield req.text();
+              useAuthorizationStore.getState().setToken(ResponseText);
+            } else {
+              closeModal();
+            }
+          })(),
+          dismissOAuthModal: closeModal
+        };
+        if (OAuth2AuthorizeModal && pushModal) {
+          return pushModal({
+            key: "oauth2-authorize",
+            modal: {
+              key: "oauth2-authorize",
+              modal: OAuth2AuthorizeModal,
+              animation: "slide-up",
+              shouldPersistUnderModals: false,
+              props: modalProps,
+              closable: true
+            }
+          });
+        }
+        return findByProps("openOAuth2Modal")?.openOAuth2Modal?.(modalProps);
+      });
     }
   });
 
@@ -10350,7 +10367,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_discordifyDecoration();
       init_showDecorationActionSheet();
       init_Card();
-      CutoutableAvatarDecoration = findByName("CutoutableAvatarDecoration");
+      CutoutableAvatarDecoration = findByFilePath("modules/collectibles/native/components/CutoutableAvatarDecoration.tsx", true) ?? findByName("CutoutableAvatarDecoration");
     }
   });
 
@@ -15185,7 +15202,7 @@ ${pendingInsertLink}` : pendingInsertLink;
             if (voiceCallAsset === void 0) voiceCallAsset = callAsset2;
             var UserProfileActions = findByName("UserProfileActions", false);
             var SimplifiedUserProfileContactButtons = findByName("SimplifiedUserProfileContactButtons", false);
-            if (SimplifiedUserProfileContactButtons === void 0) SimplifiedUserProfileContactButtons = findByName("UserProfileContactButtons", false);
+            if (SimplifiedUserProfileContactButtons === void 0) SimplifiedUserProfileContactButtons = findByFilePath("modules/user_profile/native/UserProfileContactButtons.tsx", false) ?? findByName("UserProfileContactButtons", false);
             var PrivateChannelButtons = findByName("PrivateChannelButtons", false) ?? find((x2) => x2?.type?.name === "PrivateChannelButtons" || x2?.type?.displayName === "PrivateChannelButtons" || x2?.name === "PrivateChannelButtons");
             var VideoButton = findByName("VideoButton", false);
             if (UserProfileActions !== void 0) {
@@ -15212,13 +15229,13 @@ ${pendingInsertLink}` : pendingInsertLink;
                 }
               }));
             }
-            patches18.push(after("default", SimplifiedUserProfileContactButtons, (_2, component) => {
+            if (SimplifiedUserProfileContactButtons) patches18.push(after("default", SimplifiedUserProfileContactButtons, (_2, component) => {
               var buttons = component?.props?.children;
               if (buttons === void 0) return;
               if (hidecallbuttonsSettings.upHideVoiceButton) delete buttons[1];
               if (hidecallbuttonsSettings.upHideVideoButton) delete buttons[2];
             }));
-            patches18.push(instead("default", VideoButton, (args, orig) => {
+            if (VideoButton) patches18.push(instead("default", VideoButton, (args, orig) => {
               if (hidecallbuttonsSettings.hideVCVideoButton) return;
               return orig.apply(this, args);
             }));
@@ -15599,7 +15616,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_OldButtons();
       init_storage21();
       init_utils6();
-      JumpToPresentModule = findByName("JumpToPresentButton", false);
+      JumpToPresentModule = findByFilePath("components_native/chat/JumpToPresentButton.tsx", false) ?? findByName("JumpToPresentButton", false);
       Design = findByProps("Stack", "Button", "Text");
       ({ Stack: Stack4 } = Design);
       SYM_PATCHED2 = /* @__PURE__ */ Symbol.for("Patched by JumpToTop");
@@ -20360,7 +20377,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_common();
       init_components();
       init_RolesPage();
-      GuildActionSheetProgress = findByName("GuildActionSheetProgress", false);
+      GuildActionSheetProgress = findByFilePath("modules/guild_action_sheet/native/components/GuildActionSheetProgress.tsx", false) ?? findByName("GuildActionSheetProgress", false);
       patchServer_default = (() => {
         if (!GuildActionSheetProgress) return () => {
         };
@@ -20844,7 +20861,7 @@ ${pendingInsertLink}` : pendingInsertLink;
       init_common();
       init_stores();
       ({ Pressable: Pressable5 } = findByProps("Button", "Text", "View"));
-      ProfileBanner = findByName("ProfileBanner", false);
+      ProfileBanner = findByFilePath("modules/user_profile/native/UserProfileBanner.tsx", false) ?? findByName("ProfileBanner", false);
       HeaderAvatar = findByFilePath("modules/profile_customization/native/HeaderAvatar.tsx").default;
       ({ openMediaModal } = findByProps("openMediaModal"));
       ({ hideActionSheet: hideActionSheet5 } = findByProps("hideActionSheet"));
@@ -21273,7 +21290,7 @@ ${pendingInsertLink}` : pendingInsertLink;
         }
       }));
     }
-    var MessagesItemChannelContent = findByTypeName("MessagesItemChannelContent");
+    var MessagesItemChannelContent = findByFilePath("modules/main_tabs_v2/native/tabs/messages/items/channel/MessagesItemChannelContent.tsx", true) ?? findByTypeName("MessagesItemChannelContent");
     if (MessagesItemChannelContent) {
       unpatches7.push(after("type", MessagesItemChannelContent, (args, res) => {
         var channel = args[0]?.channel;
@@ -23655,7 +23672,7 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       init_ReviewInput();
       init_ReviewRow();
       ({ getCurrentUser: getCurrentUser6 } = UserStore);
-      UserProfileCard = findByName("UserProfileCard");
+      UserProfileCard = findByFilePath("modules/user_profile/native/UserProfileCard.tsx", true) ?? findByName("UserProfileCard");
       ({ FlashList: FlashList2 } = findByProps("FlashList"));
     }
   });
@@ -23808,14 +23825,14 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       init_metro();
       init_common();
       init_ReviewCard();
-      GuildActionSheetProgress2 = findByName("GuildActionSheetProgress", false);
+      GuildActionSheetProgress2 = findByFilePath("modules/guild_action_sheet/native/components/GuildActionSheetProgress.tsx", false) ?? findByName("GuildActionSheetProgress", false);
       logger.log(GuildActionSheetProgress2);
-      patchServer_default2 = (() => instead("default", GuildActionSheetProgress2, (args, ret) => {
+      patchServer_default2 = (() => GuildActionSheetProgress2 ? instead("default", GuildActionSheetProgress2, (args, ret) => {
         var guildId = args[0]?.guild?.id;
         return React2.createElement(ReviewCard, {
           userId: guildId
         });
-      }));
+      }) : () => false);
     }
   });
 
@@ -23858,52 +23875,68 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
       init_storage30();
       init_constants4();
       init_utils7();
-      ({ pushModal: pushModal2, popModal: popModal2 } = findByProps("pushModal"));
-      OAuth2AuthorizeModal2 = findByName("OAuth2AuthorizeModal");
-      showAuthModal_default = (() => pushModal2({
-        key: "oauth2-authorize",
-        modal: {
-          key: "oauth2-authorize",
-          modal: OAuth2AuthorizeModal2,
-          animation: "slide-up",
-          shouldPersistUnderModals: false,
-          props: {
-            clientId: CLIENT_ID2,
-            redirectUri: API_URL2 + "/auth",
-            scopes: [
-              "identify"
-            ],
-            responseType: "code",
-            permissions: 0n,
-            cancelCompletesFlow: false,
-            callback: ({ location }) => _async_to_generator(function* () {
-              try {
-                var url2 = new URL(location);
-                url2.searchParams.append("returnType", "json");
-                url2.searchParams.append("clientMod", "vendetta");
-                var { token, success, message } = yield jsonFetch(url2, {
-                  headers: {
-                    accept: "application/json"
-                  }
-                });
-                if (success) {
-                  useReviewDBSettings.getState().updateSettings({
-                    authToken: token
-                  });
-                } else {
-                  popModal2("oauth2-authorize");
-                  throw new Error(message);
-                }
-              } catch (e) {
-                showToast("Authorization failed! Try again later.", findAssetId2("CircleErrorIcon"));
-                logger.error("Authorization failed!", e);
-              }
-            })(),
-            dismissOAuthModal: () => popModal2("oauth2-authorize")
-          },
-          closable: true
+      ({ pushModal: pushModal2, popModal: popModal2 } = findByProps("pushModal") ?? {});
+      OAuth2AuthorizeModal2 = findByFilePath("modules/oauth2/native/OAuth2AuthorizeModal.tsx", true) ?? findByName("OAuth2AuthorizeModal");
+      showAuthModal_default = (() => {
+        if (!pushModal2 || !popModal2) {
+          ({ pushModal: pushModal2, popModal: popModal2 } = findByProps("pushModal") ?? {});
         }
-      }));
+        OAuth2AuthorizeModal2 ??= findByFilePath("modules/oauth2/native/OAuth2AuthorizeModal.tsx", true) ?? findByName("OAuth2AuthorizeModal");
+        var closeModal = () => {
+          popModal2?.("oauth2-authorize");
+          findByProps("popWithKey")?.popWithKey?.("oauth2-authorize");
+        };
+        var modalProps = {
+          clientId: CLIENT_ID2,
+          redirectUri: API_URL2 + "/auth",
+          scopes: [
+            "identify"
+          ],
+          responseType: "code",
+          permissions: 0n,
+          cancelCompletesFlow: false,
+          callback: ({ location }) => _async_to_generator(function* () {
+            try {
+              var url2 = new URL(location);
+              url2.searchParams.append("returnType", "json");
+              url2.searchParams.append("clientMod", "vendetta");
+              var { token, success, message } = yield jsonFetch(url2, {
+                headers: {
+                  accept: "application/json"
+                }
+              });
+              if (success) {
+                useReviewDBSettings.getState().updateSettings({
+                  authToken: token
+                });
+                closeModal();
+              } else {
+                closeModal();
+                throw new Error(message);
+              }
+            } catch (e) {
+              showToast("Authorization failed! Try again later.", findAssetId2("CircleErrorIcon"));
+              logger.error("Authorization failed!", e);
+              closeModal();
+            }
+          })(),
+          dismissOAuthModal: closeModal
+        };
+        if (OAuth2AuthorizeModal2 && pushModal2) {
+          return pushModal2({
+            key: "oauth2-authorize",
+            modal: {
+              key: "oauth2-authorize",
+              modal: OAuth2AuthorizeModal2,
+              animation: "slide-up",
+              shouldPersistUnderModals: false,
+              props: modalProps,
+              closable: true
+            }
+          });
+        }
+        return findByProps("openOAuth2Modal")?.openOAuth2Modal?.(modalProps);
+      });
     }
   });
 
@@ -26483,9 +26516,9 @@ Missing the redesign ${isFunction ? "function" : "component"}: ${prop}. Please b
               if (!DrawerSurface) {
                 var inset = findByProps("useYouBarTotalHeight");
                 if (typeof inset?.useYouBarTotalHeight !== "function") throw new Error("ServerDrawer: native YouBar inset is unavailable");
-                var shade = findByTypeName("YouBarFloatingShade");
+                var shade = findByFilePath("modules/main_tabs_v2/native/you_bar/YouBarFloatingShade.tsx", true) ?? findByTypeName("YouBarFloatingShade");
                 if (typeof shade?.type !== "function") throw new Error("ServerDrawer: native YouBar shade is unavailable");
-                var channelWidth = findByName("useChannelListWidth", false);
+                var channelWidth = findByFilePath("modules/channel_list_v2/native/useChannelListWidth.tsx", false) ?? findByName("useChannelListWidth", false);
                 if (typeof channelWidth?.default !== "function") throw new Error("ServerDrawer: native channel width is unavailable");
                 var { DM_WIDTH } = findByProps("DM_WIDTH");
                 var surface = createServerDrawerSurface(createController(), abort.signal);
@@ -29096,69 +29129,83 @@ ${ruleJson}
       init_metro();
       init_constants5();
       init_AuthorizationStore2();
-      ({ pushModal: pushModal3, popModal: popModal3 } = findByProps("pushModal"));
-      OAuth2AuthorizeModal3 = findByName("OAuth2AuthorizeModal");
-      showAuthModal_default2 = (() => pushModal3({
-        key: "oauth2-authorize",
-        modal: {
-          key: "oauth2-authorize",
-          modal: OAuth2AuthorizeModal3,
-          animation: "slide-up",
-          shouldPersistUnderModals: false,
-          props: {
-            clientId: getClientId(),
-            redirectUri: getRedirectUrl(),
-            scopes: [
-              "identify"
-            ],
-            responseType: "code",
-            permissions: 0n,
-            cancelCompletesFlow: false,
-            callback: ({ location }) => _async_to_generator(function* () {
-              try {
-                var url2 = new URL(location);
-                var code = url2.searchParams.get("code");
-                if (!code) {
-                  throw new Error("No code found in redirect URL");
-                }
-                var authUrl = new URL(getRedirectUrl());
-                authUrl.searchParams.append("code", code);
-                var res = yield fetch(authUrl.toString(), {
-                  headers: {
-                    "Accept": "application/json"
-                  }
-                });
-                var text = yield res.text();
-                if (!res.ok) {
-                  throw new Error(`Server error (${res.status}): ${text}`);
-                }
-                var token;
-                try {
-                  var json2 = JSON.parse(text);
-                  token = json2.token;
-                } catch (e) {
-                  if (text.startsWith("eyJ") && text.includes(".")) {
-                    token = text.trim();
-                  }
-                }
-                if (token) {
-                  useAuthorizationStore2.getState().setToken(token);
-                  showToast("Successfully authorized!", findAssetId2("CheckIcon"));
-                  popModal3("oauth2-authorize");
-                } else {
-                  throw new Error(`No token found in server response: ${text.slice(0, 100)}...`);
-                }
-              } catch (e) {
-                showToast("Authorization failed!", findAssetId2("CircleXIcon"));
-                logger.error("[CloudSync] Authorization failed", e);
-                popModal3("oauth2-authorize");
-              }
-            })(),
-            dismissOAuthModal: () => popModal3("oauth2-authorize")
-          },
-          closable: true
+      ({ pushModal: pushModal3, popModal: popModal3 } = findByProps("pushModal") ?? {});
+      OAuth2AuthorizeModal3 = findByFilePath("modules/oauth2/native/OAuth2AuthorizeModal.tsx", true) ?? findByName("OAuth2AuthorizeModal");
+      showAuthModal_default2 = (() => {
+        if (!pushModal3 || !popModal3) {
+          ({ pushModal: pushModal3, popModal: popModal3 } = findByProps("pushModal") ?? {});
         }
-      }));
+        OAuth2AuthorizeModal3 ??= findByFilePath("modules/oauth2/native/OAuth2AuthorizeModal.tsx", true) ?? findByName("OAuth2AuthorizeModal");
+        var closeModal = () => {
+          popModal3?.("oauth2-authorize");
+          findByProps("popWithKey")?.popWithKey?.("oauth2-authorize");
+        };
+        var modalProps = {
+          clientId: getClientId(),
+          redirectUri: getRedirectUrl(),
+          scopes: [
+            "identify"
+          ],
+          responseType: "code",
+          permissions: 0n,
+          cancelCompletesFlow: false,
+          callback: ({ location }) => _async_to_generator(function* () {
+            try {
+              var url2 = new URL(location);
+              var code = url2.searchParams.get("code");
+              if (!code) {
+                throw new Error("No code found in redirect URL");
+              }
+              var authUrl = new URL(getRedirectUrl());
+              authUrl.searchParams.append("code", code);
+              var res = yield fetch(authUrl.toString(), {
+                headers: {
+                  "Accept": "application/json"
+                }
+              });
+              var text = yield res.text();
+              if (!res.ok) {
+                throw new Error(`Server error (${res.status}): ${text}`);
+              }
+              var token;
+              try {
+                var json2 = JSON.parse(text);
+                token = json2.token;
+              } catch (e) {
+                if (text.startsWith("eyJ") && text.includes(".")) {
+                  token = text.trim();
+                }
+              }
+              if (token) {
+                useAuthorizationStore2.getState().setToken(token);
+                showToast("Successfully authorized!", findAssetId2("CheckIcon"));
+                closeModal();
+              } else {
+                throw new Error(`No token found in server response: ${text.slice(0, 100)}...`);
+              }
+            } catch (e) {
+              showToast("Authorization failed!", findAssetId2("CircleXIcon"));
+              logger.error("[CloudSync] Authorization failed", e);
+              closeModal();
+            }
+          })(),
+          dismissOAuthModal: closeModal
+        };
+        if (OAuth2AuthorizeModal3 && pushModal3) {
+          return pushModal3({
+            key: "oauth2-authorize",
+            modal: {
+              key: "oauth2-authorize",
+              modal: OAuth2AuthorizeModal3,
+              animation: "slide-up",
+              shouldPersistUnderModals: false,
+              props: modalProps,
+              closable: true
+            }
+          });
+        }
+        return findByProps("openOAuth2Modal")?.openOAuth2Modal?.(modalProps);
+      });
     }
   });
 
