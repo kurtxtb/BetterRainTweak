@@ -78,7 +78,7 @@ Built from [raincord/rain](https://codeberg.org/raincord/rain) `4b091e1` plus th
 | 0008 | Badges (core and global) work again on Discord 348 by finding `useBadges` by file path |
 | 0009, 0010 | **PlatformIndicators everywhere** – icons next to usernames in member lists, the DM list, DM and channel headers, profiles and the You tab; live updates on presence changes; "Hide mobile status" works again; a Diagnostics section in its settings shows which patches applied |
 | 0011 | **New plugin: PlatformSpoof** – appear online as Desktop, Web, VR or Console instead of mobile (Rain rewrite of fshin's Revenge plugin) |
-| 0012 | **Plugins fix for Discord 348+**: fix Translator, ViewRaw, Quoter, JumpToTop and other ActionSheet plugins for React Compiler builds |
+| 0012 | **Plugins & OAuth2 modal fix for Discord 348+**: fix Cloud Sync / ReviewDB / Decor "Authorize with Discord" OAuth2 modal crash, protect Metro `_importingModuleId` tracking with `try/finally`, and fix Translator (with DeepL → Google Translate fallback), ViewRaw, Quoter, JumpToTop, PermissionViewer, TextReplace, HideCallButtons, Declutter, BetterYouBar, PictureLinks, ReviewDB, ServerDrawer, and other plugins for React Compiler builds |
 
 Many of these exist because Discord 348 is a React Compiler build: most component functions are anonymous, so
 Rain's name-based lookups fail and the affected code finds modules by their exports or file path instead.
